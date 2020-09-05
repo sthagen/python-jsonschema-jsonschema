@@ -1,14 +1,9 @@
-# -*- coding: utf-8 -*-
-#
-# This file is execfile()d with the current directory set to its containing dir.
-
 from textwrap import dedent
 import os
 import re
 import sys
 
 import jsonschema
-
 
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
@@ -25,6 +20,7 @@ sys.path = ext_paths + sys.path
 # coming with Sphinx (named "sphinx.ext.*") or your custom ones.
 extensions = [
     "sphinx.ext.autodoc",
+    "sphinx.ext.autosectionlabel",
     "sphinx.ext.coverage",
     "sphinx.ext.doctest",
     "sphinx.ext.intersphinx",
@@ -83,14 +79,12 @@ pygments_style = "sphinx"
 
 doctest_global_setup = dedent(
     """
-    from __future__ import print_function
     from jsonschema import *
 """
 )
 
 intersphinx_mapping = {
-    "python": ("https://docs.python.org/2.7", None),
-    "python3": ("https://docs.python.org/3", None),
+    "python": ("https://docs.python.org/3", None),
 }
 
 
@@ -250,6 +244,10 @@ linkcheck_ignore = [
     "https://github.com/Julian/jsonschema/actions",
     "https://github.com/Julian/jsonschema/workflows/CI/badge.svg",
 ]
+
+# -- Options for sphinxcontrib-autosectionlabel ---------------------------
+
+autosectionlabel_prefix_document = True
 
 # -- Options for sphinxcontrib-spelling -----------------------------------
 

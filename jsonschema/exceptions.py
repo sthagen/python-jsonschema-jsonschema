@@ -9,8 +9,6 @@ import textwrap
 import attr
 
 from jsonschema import _utils
-from jsonschema.compat import PY3, iteritems
-
 
 WEAK_MATCHES = frozenset(["anyOf", "oneOf"])
 STRONG_MATCHES = frozenset()
@@ -61,7 +59,7 @@ class _Error(Exception):
     def __repr__(self):
         return "<%s: %r>" % (self.__class__.__name__, self.message)
 
-    def __unicode__(self):
+    def __str__(self):
         essential_for_verbose = (
             self.validator, self.validator_value, self.instance, self.schema,
         )
@@ -87,12 +85,6 @@ class _Error(Exception):
             _utils.format_as_index(self.relative_path),
             _utils.indent(pinstance),
         )
-
-    if PY3:
-        __str__ = __unicode__
-    else:
-        def __str__(self):
-            return unicode(self).encode("utf-8")
 
     @classmethod
     def create_from(cls, other):
@@ -129,7 +121,7 @@ class _Error(Exception):
         return path
 
     def _set(self, **kwargs):
-        for k, v in iteritems(kwargs):
+        for k, v in kwargs.items():
             if getattr(self, k) is _unset:
                 setattr(self, k, v)
 
@@ -179,14 +171,8 @@ class UndefinedTypeCheck(Exception):
     def __init__(self, type):
         self.type = type
 
-    def __unicode__(self):
+    def __str__(self):
         return "Type %r is unknown to this type checker" % self.type
-
-    if PY3:
-        __str__ = __unicode__
-    else:
-        def __str__(self):
-            return unicode(self).encode("utf-8")
 
 
 class UnknownType(Exception):
@@ -199,7 +185,7 @@ class UnknownType(Exception):
         self.instance = instance
         self.schema = schema
 
-    def __unicode__(self):
+    def __str__(self):
         pschema = pprint.pformat(self.schema, width=72)
         pinstance = pprint.pformat(self.instance, width=72)
         return textwrap.dedent("""
@@ -210,12 +196,6 @@ class UnknownType(Exception):
             %s
             """.rstrip()
         ) % (self.type, _utils.indent(pschema), _utils.indent(pinstance))
-
-    if PY3:
-        __str__ = __unicode__
-    else:
-        def __str__(self):
-            return unicode(self).encode("utf-8")
 
 
 class FormatError(Exception):
@@ -228,14 +208,8 @@ class FormatError(Exception):
         self.message = message
         self.cause = self.__cause__ = cause
 
-    def __unicode__(self):
+    def __str__(self):
         return self.message
-
-    if PY3:
-        __str__ = __unicode__
-    else:
-        def __str__(self):
-            return self.message.encode("utf-8")
 
 
 class ErrorTree(object):
@@ -268,10 +242,10 @@ class ErrorTree(object):
         """
         Retrieve the child tree one level down at the given ``index``.
 
-        If the index is not in the instance that this tree corresponds to and
-        is not known by this tree, whatever error would be raised by
-        ``instance.__getitem__`` will be propagated (usually this is some
-        subclass of `exceptions.LookupError`.
+        If the index is not in the instance that this tree corresponds
+        to and is not known by this tree, whatever error would be raised
+        by ``instance.__getitem__`` will be propagated (usually this is
+        some subclass of `LookupError`.
         """
 
         if self._instance is not _unset and index not in self:
@@ -306,7 +280,7 @@ class ErrorTree(object):
         The total number of errors in the entire tree, including children.
         """
 
-        child_errors = sum(len(tree) for _, tree in iteritems(self._contents))
+        child_errors = sum(len(tree) for _, tree in self._contents.items())
         return len(self.errors) + child_errors
 
 
@@ -349,14 +323,14 @@ def best_match(errors, key=relevance):
     not be relevant.
 
     Arguments:
-        errors (collections.Iterable):
+        errors (collections.abc.Iterable):
 
             the errors to select from. Do not provide a mixture of
             errors from different validation attempts (i.e. from
             different instances or schemas), since it won't produce
             sensical output.
 
-        key (collections.Callable):
+        key (collections.abc.Callable):
 
             the key to use when sorting errors. See `relevance` and
             transitively `by_relevance` for more details (the default is

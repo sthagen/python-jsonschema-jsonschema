@@ -1,3 +1,5 @@
+from io import StringIO
+from json import JSONDecodeError
 from textwrap import dedent
 from unittest import TestCase
 import errno
@@ -6,8 +8,7 @@ import os
 import subprocess
 import sys
 
-from jsonschema import Draft4Validator, cli, __version__
-from jsonschema.compat import JSONDecodeError, NativeIO
+from jsonschema import Draft4Validator, Draft7Validator, __version__, cli
 from jsonschema.exceptions import SchemaError, ValidationError
 from jsonschema.tests._helpers import captured_output
 from jsonschema.validators import _LATEST_VERSION, validate
@@ -37,7 +38,7 @@ def fake_open(all_contents):
         contents = all_contents.get(path)
         if contents is None:
             raise OSError(errno.ENOENT, os.strerror(errno.ENOENT), path)
-        return NativeIO(contents)
+        return StringIO(contents)
     return open
 
 
@@ -52,7 +53,7 @@ def _message_for(non_json):
 
 class TestCLI(TestCase):
     def run_cli(
-            self, argv, files={}, stdin=NativeIO(), exit_code=0, **override
+            self, argv, files={}, stdin=StringIO(), exit_code=0, **override
     ):
         arguments = cli.parse_args(argv)
         arguments.update(override)
@@ -60,7 +61,7 @@ class TestCLI(TestCase):
         self.assertFalse(hasattr(cli, "open"))
         cli.open = fake_open(files)
         try:
-            stdout, stderr = NativeIO(), NativeIO()
+            stdout, stderr = StringIO(), StringIO()
             actual_exit_code = cli.run(
                 arguments,
                 stdin=stdin,
@@ -466,7 +467,7 @@ class TestCLI(TestCase):
 
         self.assertOutputs(
             files=dict(some_schema="{}"),
-            stdin=NativeIO(instance),
+            stdin=StringIO(instance),
 
             argv=["some_schema"],
 
@@ -479,7 +480,7 @@ class TestCLI(TestCase):
     def test_instance_is_invalid_JSON_on_stdin_pretty_output(self):
         stdout, stderr = self.run_cli(
             files=dict(some_schema="{}"),
-            stdin=NativeIO("not valid JSON!"),
+            stdin=StringIO("not valid JSON!"),
 
             argv=["--output", "pretty", "some_schema"],
 
@@ -651,7 +652,7 @@ class TestCLI(TestCase):
     def test_successful_validation_of_stdin(self):
         self.assertOutputs(
             files=dict(some_schema="{}"),
-            stdin=NativeIO("{}"),
+            stdin=StringIO("{}"),
             argv=["some_schema"],
             stdout="",
             stderr="",
@@ -660,7 +661,7 @@ class TestCLI(TestCase):
     def test_successful_validation_of_stdin_pretty_output(self):
         self.assertOutputs(
             files=dict(some_schema="{}"),
-            stdin=NativeIO("{}"),
+            stdin=StringIO("{}"),
             argv=["--output", "pretty", "some_schema"],
             stdout="===[SUCCESS]===(<stdin>)===\n",
             stderr="",
@@ -674,7 +675,7 @@ class TestCLI(TestCase):
             stderr="",
         )
 
-    def test_successful_validation__of_just_the_schema_pretty_output(self):
+    def test_successful_validation_of_just_the_schema_pretty_output(self):
         self.assertOutputs(
             files=dict(some_schema="{}", some_instance="{}"),
             argv=["--output", "pretty", "-i", "some_instance", "some_schema"],
@@ -682,9 +683,54 @@ class TestCLI(TestCase):
             stderr="",
         )
 
-    def test_real_validator(self):
+    def test_it_validates_using_the_latest_validator_when_unspecified(self):
+        # There isn't a better way now I can think of to ensure that the
+        # latest version was used, given that the call to validator_for
+        # is hidden inside the CLI, so guard that that's the case, and
+        # this test will have to be updated when versions change until
+        # we can think of a better way to ensure this behavior.
+        self.assertIs(Draft7Validator, _LATEST_VERSION)
+
         self.assertOutputs(
-            files=dict(some_schema='{"minimum": 30}', some_instance="37"),
+            files=dict(some_schema='{"const": "check"}', some_instance='"a"'),
+            argv=["-i", "some_instance", "some_schema"],
+            exit_code=1,
+            stdout="",
+            stderr="a: 'check' was expected\n",
+        )
+
+    def test_it_validates_using_draft7_when_specified(self):
+        """
+        Specifically, `const` validation applies for Draft 7.
+        """
+        schema = """
+            {
+                "$schema": "http://json-schema.org/draft-07/schema#",
+                "const": "check"
+            }
+        """
+        instance = '"foo"'
+        self.assertOutputs(
+            files=dict(some_schema=schema, some_instance=instance),
+            argv=["-i", "some_instance", "some_schema"],
+            exit_code=1,
+            stdout="",
+            stderr="foo: 'check' was expected\n",
+        )
+
+    def test_it_validates_using_draft4_when_specified(self):
+        """
+        Specifically, `const` validation *does not* apply for Draft 4.
+        """
+        schema = """
+            {
+                "$schema": "http://json-schema.org/draft-04/schema#",
+                "const": "check"
+            }
+            """
+        instance = '"foo"'
+        self.assertOutputs(
+            files=dict(some_schema=schema, some_instance=instance),
             argv=["-i", "some_instance", "some_schema"],
             stdout="",
             stderr="",
@@ -715,15 +761,6 @@ class TestParser(TestCase):
             ]
         )
         self.assertIs(arguments["validator"], Draft4Validator)
-
-    def test_latest_validator_is_the_default(self):
-        arguments = cli.parse_args(
-            [
-                "--instance", "mem://some/instance",
-                "mem://some/schema",
-            ]
-        )
-        self.assertIs(arguments["validator"], _LATEST_VERSION)
 
     def test_unknown_output(self):
         # Avoid the help message on stdout
