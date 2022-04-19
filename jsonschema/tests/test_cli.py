@@ -1,16 +1,28 @@
+from contextlib import redirect_stderr, redirect_stdout
 from io import StringIO
 from json import JSONDecodeError
+from pathlib import Path
 from textwrap import dedent
 from unittest import TestCase
-import errno
 import json
 import os
 import subprocess
 import sys
+import tempfile
 
-from jsonschema import Draft4Validator, Draft7Validator, __version__, cli
-from jsonschema.exceptions import SchemaError, ValidationError
-from jsonschema.tests._helpers import captured_output
+try:  # pragma: no cover
+    from importlib import metadata
+except ImportError:  # pragma: no cover
+    import importlib_metadata as metadata  # type: ignore
+
+from pyrsistent import m
+
+from jsonschema import Draft4Validator, Draft202012Validator, cli
+from jsonschema.exceptions import (
+    RefResolutionError,
+    SchemaError,
+    ValidationError,
+)
 from jsonschema.validators import _LATEST_VERSION, validate
 
 
@@ -24,7 +36,7 @@ def fake_validator(*errors):
         def iter_errors(self, instance):
             if errors:
                 return errors.pop()
-            return []
+            return []  # pragma: no cover
 
         @classmethod
         def check_schema(self, schema):
@@ -37,7 +49,7 @@ def fake_open(all_contents):
     def open(path):
         contents = all_contents.get(path)
         if contents is None:
-            raise OSError(errno.ENOENT, os.strerror(errno.ENOENT), path)
+            raise FileNotFoundError(path)
         return StringIO(contents)
     return open
 
@@ -53,7 +65,7 @@ def _message_for(non_json):
 
 class TestCLI(TestCase):
     def run_cli(
-            self, argv, files={}, stdin=StringIO(), exit_code=0, **override
+        self, argv, files=m(), stdin=StringIO(), exit_code=0, **override,
     ):
         arguments = cli.parse_args(argv)
         arguments.update(override)
@@ -128,7 +140,7 @@ class TestCLI(TestCase):
                 I am an error!
                 -----------------------------
             """,
-        ),
+        )
 
     def test_invalid_instance_explicit_plain_output(self):
         error = ValidationError("I am an error!", instance=12)
@@ -330,7 +342,7 @@ class TestCLI(TestCase):
 
             exit_code=1,
             stderr="""\
-                57: 57 is not valid under any of the given schemas
+                57: 57 is not of type 'object', 'boolean'
             """,
         )
 
@@ -683,13 +695,94 @@ class TestCLI(TestCase):
             stderr="",
         )
 
+    def test_successful_validation_via_explicit_base_uri(self):
+        ref_schema_file = tempfile.NamedTemporaryFile(delete=False)
+        self.addCleanup(os.remove, ref_schema_file.name)
+
+        ref_path = Path(ref_schema_file.name)
+        ref_path.write_text('{"definitions": {"num": {"type": "integer"}}}')
+
+        schema = f'{{"$ref": "{ref_path.name}#definitions/num"}}'
+
+        self.assertOutputs(
+            files=dict(some_schema=schema, some_instance="1"),
+            argv=[
+                "-i", "some_instance",
+                "--base-uri", ref_path.parent.as_uri() + "/",
+                "some_schema",
+            ],
+            stdout="",
+            stderr="",
+        )
+
+    def test_unsuccessful_validation_via_explicit_base_uri(self):
+        ref_schema_file = tempfile.NamedTemporaryFile(delete=False)
+        self.addCleanup(os.remove, ref_schema_file.name)
+
+        ref_path = Path(ref_schema_file.name)
+        ref_path.write_text('{"definitions": {"num": {"type": "integer"}}}')
+
+        schema = f'{{"$ref": "{ref_path.name}#definitions/num"}}'
+
+        self.assertOutputs(
+            files=dict(some_schema=schema, some_instance='"1"'),
+            argv=[
+                "-i", "some_instance",
+                "--base-uri", ref_path.parent.as_uri() + "/",
+                "some_schema",
+            ],
+            exit_code=1,
+            stdout="",
+            stderr="1: '1' is not of type 'integer'\n",
+        )
+
+    def test_nonexistent_file_with_explicit_base_uri(self):
+        schema = '{"$ref": "someNonexistentFile.json#definitions/num"}'
+        instance = "1"
+
+        with self.assertRaises(RefResolutionError) as e:
+            self.assertOutputs(
+                files=dict(
+                    some_schema=schema,
+                    some_instance=instance,
+                ),
+                argv=[
+                    "-i", "some_instance",
+                    "--base-uri", Path.cwd().as_uri(),
+                    "some_schema",
+                ],
+            )
+        error = str(e.exception)
+        self.assertIn(f"{os.sep}someNonexistentFile.json'", error)
+
+    def test_invalid_exlicit_base_uri(self):
+        schema = '{"$ref": "foo.json#definitions/num"}'
+        instance = "1"
+
+        with self.assertRaises(RefResolutionError) as e:
+            self.assertOutputs(
+                files=dict(
+                    some_schema=schema,
+                    some_instance=instance,
+                ),
+                argv=[
+                    "-i", "some_instance",
+                    "--base-uri", "not@UR1",
+                    "some_schema",
+                ],
+            )
+        error = str(e.exception)
+        self.assertEqual(
+            error, "unknown url type: 'foo.json'",
+        )
+
     def test_it_validates_using_the_latest_validator_when_unspecified(self):
         # There isn't a better way now I can think of to ensure that the
         # latest version was used, given that the call to validator_for
         # is hidden inside the CLI, so guard that that's the case, and
         # this test will have to be updated when versions change until
         # we can think of a better way to ensure this behavior.
-        self.assertIs(Draft7Validator, _LATEST_VERSION)
+        self.assertIs(Draft202012Validator, _LATEST_VERSION)
 
         self.assertOutputs(
             files=dict(some_schema='{"const": "check"}', some_instance='"a"'),
@@ -748,7 +841,7 @@ class TestParser(TestCase):
                 "jsonschema.tests.test_cli.TestParser.FakeValidator",
                 "--instance", "mem://some/instance",
                 "mem://some/schema",
-            ]
+            ],
         )
         self.assertIs(arguments["validator"], self.FakeValidator)
 
@@ -758,39 +851,36 @@ class TestParser(TestCase):
                 "--validator", "Draft4Validator",
                 "--instance", "mem://some/instance",
                 "mem://some/schema",
-            ]
+            ],
         )
         self.assertIs(arguments["validator"], Draft4Validator)
 
-    def test_unknown_output(self):
-        # Avoid the help message on stdout
-        with captured_output() as (stdout, stderr):
+    def cli_output_for(self, *argv):
+        stdout, stderr = StringIO(), StringIO()
+        with redirect_stdout(stdout), redirect_stderr(stderr):
             with self.assertRaises(SystemExit):
-                cli.parse_args(
-                    [
-                        "--output", "foo",
-                        "mem://some/schema",
-                    ]
-                )
-        self.assertIn("invalid choice: 'foo'", stderr.getvalue())
-        self.assertFalse(stdout.getvalue())
+                cli.parse_args(argv)
+        return stdout.getvalue(), stderr.getvalue()
+
+    def test_unknown_output(self):
+        stdout, stderr = self.cli_output_for(
+            "--output", "foo",
+            "mem://some/schema",
+        )
+        self.assertIn("invalid choice: 'foo'", stderr)
+        self.assertFalse(stdout)
 
     def test_useless_error_format(self):
-        # Avoid the help message on stdout
-        with captured_output() as (stdout, stderr):
-            with self.assertRaises(SystemExit):
-                cli.parse_args(
-                    [
-                        "--output", "pretty",
-                        "--error-format", "foo",
-                        "mem://some/schema",
-                    ]
-                )
+        stdout, stderr = self.cli_output_for(
+            "--output", "pretty",
+            "--error-format", "foo",
+            "mem://some/schema",
+        )
         self.assertIn(
             "--error-format can only be used with --output plain",
-            stderr.getvalue(),
+            stderr,
         )
-        self.assertFalse(stdout.getvalue())
+        self.assertFalse(stdout)
 
 
 class TestCLIIntegration(TestCase):
@@ -807,7 +897,7 @@ class TestCLIIntegration(TestCase):
             stderr=subprocess.STDOUT,
         )
         version = version.decode("utf-8").strip()
-        self.assertEqual(version, __version__)
+        self.assertEqual(version, metadata.version("jsonschema"))
 
     def test_no_arguments_shows_usage_notes(self):
         output = subprocess.check_output(

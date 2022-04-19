@@ -1,3 +1,98 @@
+v4.4.0
+------
+
+* Add ``mypy`` support (#892)
+* Add support for Python 3.11
+
+v4.3.3
+------
+
+* Properly report deprecation warnings at the right stack level (#899)
+
+v4.3.2
+------
+
+* Additional performance improvements for resolving refs (#896)
+
+v4.3.1
+------
+
+* Resolving refs has had performance improvements (#893)
+
+v4.3.0
+------
+
+* Fix undesired fallback to brute force container uniqueness check on
+  certain input types (#893)
+* Implement a PEP544 Protocol for validator classes (#890)
+
+v4.2.1
+------
+
+* Pin ``importlib.resources`` from below (#877)
+
+v4.2.0
+------
+
+* Use ``importlib.resources`` to load schemas (#873)
+* Ensure all elements of arrays are verified for uniqueness by ``uniqueItems``
+  (#866)
+
+v4.1.2
+------
+
+* Fix ``dependentSchemas`` to properly consider non-object instances to be
+  valid (#850)
+
+v4.1.1
+------
+
+* Fix ``prefixItems`` not indicating which item was invalid within the instance
+  path (#862)
+
+v4.1.0
+------
+
+* Add Python 3.10 to the list of supported Python versions
+
+v4.0.1
+------
+
+* Fix the declaration of minimum supported Python version (#846)
+
+v4.0.0
+------
+
+* Partial support for Draft 2020-12 (as well as 2019-09).
+  Thanks to Thomas Schmidt and Harald Nezbeda.
+* ``False`` and ``0`` are now properly considered non-equal even
+  recursively within a container (#686). As part of this change,
+  ``uniqueItems`` validation may be *slower* in some cases. Please feel
+  free to report any significant performance regressions, though in
+  some cases they may be difficult to address given the specification
+  requirement.
+* The CLI has been improved, and in particular now supports a ``--output``
+  option (with ``plain`` (default) or ``pretty`` arguments) to control the
+  output format. Future work may add additional machine-parsable output
+  formats.
+* Code surrounding ``DEFAULT_TYPES`` and the legacy mechanism for
+  specifying types to validators have been removed, as per the deprecation
+  policy. Validators should use the ``TypeChecker`` object to customize
+  the set of Python types corresponding to JSON Schema types.
+* Validation errors now have a ``json_path`` attribute, describing their
+  location in JSON path format
+* Support for the IP address and domain name formats has been improved
+* Support for Python 2 and 3.6 has been dropped, with ``python_requires``
+  properly set.
+* ``multipleOf`` could overflow when given sufficiently large numbers. Now,
+  when an overflow occurs, ``jsonschema`` will fall back to using fraction
+  division (#746).
+* ``jsonschema.__version__``, ``jsonschema.validators.validators``,
+  ``jsonschema.validators.meta_schemas`` and
+  ``jsonschema.RefResolver.in_scope`` have been deprecated, as has
+  passing a second-argument schema to ``Validator.iter_errors`` and
+  ``Validator.is_valid``.
+
 v3.2.0
 ------
 

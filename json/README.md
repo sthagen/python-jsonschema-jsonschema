@@ -1,4 +1,9 @@
-# JSON Schema Test Suite [![Build Status](https://github.com/json-schema-org/JSON-Schema-Test-Suite/workflows/Test%20Suite%20Sanity%20Checking/badge.svg)](https://github.com/json-schema-org/JSON-Schema-Test-Suite/actions?query=workflow%3A%22Test+Suite+Sanity+Checking%22)
+# JSON Schema Test Suite 
+[![Contributor Covenant](https://img.shields.io/badge/Contributor%20Covenant-2.1-4baaaa.svg)](https://github.com/json-schema-org/.github/blob/main/CODE_OF_CONDUCT.md)
+[![Project Status: Active – The project has reached a stable, usable state and is being actively developed.](https://www.repostatus.org/badges/latest/active.svg)](https://www.repostatus.org/#active)
+[![Financial Contributors on Open Collective](https://opencollective.com/json-schema/all/badge.svg?label=financial+contributors)](https://opencollective.com/json-schema)
+
+[![Build Status](https://github.com/json-schema-org/JSON-Schema-Test-Suite/workflows/Test%20Suite%20Sanity%20Checking/badge.svg)](https://github.com/json-schema-org/JSON-Schema-Test-Suite/actions?query=workflow%3A%22Test+Suite+Sanity+Checking%22)
 
 This repository contains a set of JSON objects that implementors of JSON Schema
 validation libraries can use to test their validators.
@@ -60,9 +65,13 @@ directory. This is:
 
 ## Coverage
 
-Drafts 07, 06, 04, and 03 should have full coverage, with tests for drafts 06,
-07, and 2019-09 being considered current and actively supported. Draft 2019-09
-is almost fully covered.
+All JSON Schema specification releases should be well covered by this suite,
+including drafts 2020-12, 2019-09, 07, 06, 04 and 03. Additional coverage is
+always welcome, particularly for bugs encountered in real-world
+implementations.
+
+Drafts 04 and 03 are considered "frozen" in that less effort is put in to
+backport new tests to these versions.
 
 Contributions are very welcome, especially from implementers as they add support
 to their own implementations.
@@ -95,11 +104,11 @@ This suite is being used by:
 
 ### Dart
 
-* [json_schema](https://github.com/patefacio/json_schema)
+* [json\_schema](https://github.com/patefacio/json_schema)
 
 ### Elixir
 
-* [ex_json_schema](https://github.com/jonasschmidt/ex_json_schema)
+* [ex\_json\_schema](https://github.com/jonasschmidt/ex_json_schema)
 
 ### Erlang
 
@@ -122,6 +131,7 @@ This suite is being used by:
 * [networknt/json-schema-validator](https://github.com/networknt/json-schema-validator)
 * [Justify](https://github.com/leadpony/justify)
 * [Snow](https://github.com/ssilverman/snowy-json)
+* [jsonschemafriend](https://github.com/jimblackler/jsonschemafriend)
 
 ### JavaScript
 
@@ -158,28 +168,31 @@ which also welcomes your contributions!
 ### Perl
 
 * [JSON::Schema::Draft201909](https://github.com/karenetheridge/JSON-Schema-Draft201909)
+* [JSON::Schema::Tiny](https://github.com/karenetheridge/JSON-Schema-Tiny)
 * [Test::JSON::Schema::Acceptance](https://github.com/karenetheridge/Test-JSON-Schema-Acceptance)
 
 ### PHP
 
+* [opis/json-schema](https://github.com/opis/json-schema)
 * [json-schema](https://github.com/justinrainbow/json-schema)
 * [json-guard](https://github.com/thephpleague/json-guard)
 
 ### PostgreSQL
 
 * [postgres-json-schema](https://github.com/gavinwahl/postgres-json-schema)
-* [is_jsonb_valid](https://github.com/furstenheim/is_jsonb_valid)
+* [is\_jsonb\_valid](https://github.com/furstenheim/is_jsonb_valid)
 
 ### Python
 
 * [jsonschema](https://github.com/Julian/jsonschema)
 * [fastjsonschema](https://github.com/seznam/python-fastjsonschema)
 * [hypothesis-jsonschema](https://github.com/Zac-HD/hypothesis-jsonschema)
+* [jschon](https://github.com/marksparkza/jschon)
 
 ### Ruby
 
 * [json-schema](https://github.com/hoxworth/json-schema)
-* [json_schemer](https://github.com/davishmcclurg/json_schemer)
+* [json\_schemer](https://github.com/davishmcclurg/json_schemer)
 
 ### Rust
 

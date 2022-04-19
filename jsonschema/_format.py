@@ -1,6 +1,11 @@
+from __future__ import annotations
+
+from contextlib import suppress
+from uuid import UUID
 import datetime
 import ipaddress
 import re
+import typing
 
 from jsonschema.exceptions import FormatError
 
@@ -28,7 +33,13 @@ class FormatChecker(object):
             limit which formats will be used during validation.
     """
 
-    checkers = {}
+    checkers: dict[
+        str,
+        tuple[
+            typing.Callable[[typing.Any], bool],
+            Exception | tuple[Exception, ...],
+        ],
+    ] = {}
 
     def __init__(self, formats=None):
         if formats is None:
@@ -96,9 +107,7 @@ class FormatChecker(object):
         except raises as e:
             cause = e
         if not result:
-            raise FormatError(
-                "%r is not a %r" % (instance, format), cause=cause,
-            )
+            raise FormatError(f"{instance!r} is not a {format!r}", cause=cause)
 
     def conforms(self, instance, format):
         """
@@ -131,13 +140,16 @@ draft3_format_checker = FormatChecker()
 draft4_format_checker = FormatChecker()
 draft6_format_checker = FormatChecker()
 draft7_format_checker = FormatChecker()
-
+draft201909_format_checker = FormatChecker()
+draft202012_format_checker = FormatChecker()
 
 _draft_checkers = dict(
     draft3=draft3_format_checker,
     draft4=draft4_format_checker,
     draft6=draft6_format_checker,
     draft7=draft7_format_checker,
+    draft201909=draft201909_format_checker,
+    draft202012=draft202012_format_checker,
 )
 
 
@@ -147,12 +159,16 @@ def _checks_drafts(
     draft4=None,
     draft6=None,
     draft7=None,
+    draft201909=None,
+    draft202012=None,
     raises=(),
 ):
     draft3 = draft3 or name
     draft4 = draft4 or name
     draft6 = draft6 or name
     draft7 = draft7 or name
+    draft201909 = draft201909 or name
+    draft202012 = draft202012 or name
 
     def wrap(func):
         if draft3:
@@ -163,13 +179,21 @@ def _checks_drafts(
             func = _draft_checkers["draft6"].checks(draft6, raises)(func)
         if draft7:
             func = _draft_checkers["draft7"].checks(draft7, raises)(func)
+        if draft201909:
+            func = _draft_checkers["draft201909"].checks(draft201909, raises)(
+                func,
+            )
+        if draft202012:
+            func = _draft_checkers["draft202012"].checks(draft202012, raises)(
+                func,
+            )
 
         # Oy. This is bad global state, but relied upon for now, until
-        # deprecation. See https://github.com/Julian/jsonschema/issues/519
-        # and test_format_checkers_come_with_defaults
-        FormatChecker.cls_checks(draft7 or draft6 or draft4 or draft3, raises)(
-            func,
-        )
+        # deprecation. See #519 and test_format_checkers_come_with_defaults
+        FormatChecker.cls_checks(
+            draft202012 or draft201909 or draft7 or draft6 or draft4 or draft3,
+            raises,
+        )(func)
         return func
     return wrap
 
@@ -187,6 +211,8 @@ def is_email(instance):
     draft4="ipv4",
     draft6="ipv4",
     draft7="ipv4",
+    draft201909="ipv4",
+    draft202012="ipv4",
     raises=ipaddress.AddressValueError,
 )
 def is_ipv4(instance):
@@ -199,19 +225,20 @@ def is_ipv4(instance):
 def is_ipv6(instance):
     if not isinstance(instance, str):
         return True
-    return ipaddress.IPv6Address(instance)
+    address = ipaddress.IPv6Address(instance)
+    return not getattr(address, "scope_id", "")
 
 
-try:
+with suppress(ImportError):
     from fqdn import FQDN
-except ImportError:
-    pass
-else:
+
     @_checks_drafts(
         draft3="host-name",
         draft4="hostname",
         draft6="hostname",
         draft7="hostname",
+        draft201909="hostname",
+        draft202012="hostname",
     )
     def is_host_name(instance):
         if not isinstance(instance, str):
@@ -219,14 +246,14 @@ else:
         return FQDN(instance).is_valid
 
 
-try:
+with suppress(ImportError):
     # The built-in `idna` codec only implements RFC 3890, so we go elsewhere.
     import idna
-except ImportError:
-    pass
-else:
+
     @_checks_drafts(
         draft7="idn-hostname",
+        draft201909="idn-hostname",
+        draft202012="idn-hostname",
         raises=(idna.IDNAError, UnicodeError),
     )
     def is_idn_host_name(instance):
@@ -239,11 +266,9 @@ else:
 try:
     import rfc3987
 except ImportError:
-    try:
+    with suppress(ImportError):
         from rfc3986_validator import validate_rfc3986
-    except ImportError:
-        pass
-    else:
+
         @_checks_drafts(name="uri")
         def is_uri(instance):
             if not isinstance(instance, str):
@@ -253,6 +278,8 @@ except ImportError:
         @_checks_drafts(
             draft6="uri-reference",
             draft7="uri-reference",
+            draft201909="uri-reference",
+            draft202012="uri-reference",
             raises=ValueError,
         )
         def is_uri_reference(instance):
@@ -261,13 +288,23 @@ except ImportError:
             return validate_rfc3986(instance, rule="URI_reference")
 
 else:
-    @_checks_drafts(draft7="iri", raises=ValueError)
+    @_checks_drafts(
+        draft7="iri",
+        draft201909="iri",
+        draft202012="iri",
+        raises=ValueError,
+    )
     def is_iri(instance):
         if not isinstance(instance, str):
             return True
         return rfc3987.parse(instance, rule="IRI")
 
-    @_checks_drafts(draft7="iri-reference", raises=ValueError)
+    @_checks_drafts(
+        draft7="iri-reference",
+        draft201909="iri-reference",
+        draft202012="iri-reference",
+        raises=ValueError,
+    )
     def is_iri_reference(instance):
         if not isinstance(instance, str):
             return True
@@ -282,6 +319,8 @@ else:
     @_checks_drafts(
         draft6="uri-reference",
         draft7="uri-reference",
+        draft201909="uri-reference",
+        draft202012="uri-reference",
         raises=ValueError,
     )
     def is_uri_reference(instance):
@@ -289,23 +328,20 @@ else:
             return True
         return rfc3987.parse(instance, rule="URI_reference")
 
+with suppress(ImportError):
+    from rfc3339_validator import validate_rfc3339
 
-try:
-    from strict_rfc3339 import validate_rfc3339
-except ImportError:
-    try:
-        from rfc3339_validator import validate_rfc3339
-    except ImportError:
-        validate_rfc3339 = None
-
-if validate_rfc3339:
     @_checks_drafts(name="date-time")
     def is_datetime(instance):
         if not isinstance(instance, str):
             return True
-        return validate_rfc3339(instance)
+        return validate_rfc3339(instance.upper())
 
-    @_checks_drafts(draft7="time")
+    @_checks_drafts(
+        draft7="time",
+        draft201909="time",
+        draft202012="time",
+    )
     def is_time(instance):
         if not isinstance(instance, str):
             return True
@@ -319,18 +355,17 @@ def is_regex(instance):
     return re.compile(instance)
 
 
-if hasattr(datetime.date, "fromisoformat"):
-    _is_date = datetime.date.fromisoformat
-else:
-    def _is_date(instance):
-        return datetime.datetime.strptime(instance, "%Y-%m-%d")
-
-
-@_checks_drafts(draft3="date", draft7="date", raises=ValueError)
+@_checks_drafts(
+    draft3="date",
+    draft7="date",
+    draft201909="date",
+    draft202012="date",
+    raises=ValueError,
+)
 def is_date(instance):
     if not isinstance(instance, str):
         return True
-    return _is_date(instance)
+    return instance.isascii() and datetime.date.fromisoformat(instance)
 
 
 @_checks_drafts(draft3="time", raises=ValueError)
@@ -340,42 +375,31 @@ def is_draft3_time(instance):
     return datetime.datetime.strptime(instance, "%H:%M:%S")
 
 
-try:  # webcolors>=1.11
+with suppress(ImportError):
     from webcolors import CSS21_NAMES_TO_HEX
     import webcolors
-except ImportError:
-    try:  # webcolors<1.11
-        from webcolors import css21_names_to_hex as CSS21_NAMES_TO_HEX
-        import webcolors
-    except ImportError:
-        pass
-else:
+
     def is_css_color_code(instance):
         return webcolors.normalize_hex(instance)
 
     @_checks_drafts(draft3="color", raises=(ValueError, TypeError))
     def is_css21_color(instance):
         if (
-            not isinstance(instance, str) or
-            instance.lower() in CSS21_NAMES_TO_HEX
+            not isinstance(instance, str)
+            or instance.lower() in CSS21_NAMES_TO_HEX
         ):
             return True
         return is_css_color_code(instance)
 
-    def is_css3_color(instance):
-        if instance.lower() in webcolors.css3_names_to_hex:
-            return True
-        return is_css_color_code(instance)
 
-
-try:
+with suppress(ImportError):
     import jsonpointer
-except ImportError:
-    pass
-else:
+
     @_checks_drafts(
         draft6="json-pointer",
         draft7="json-pointer",
+        draft201909="json-pointer",
+        draft202012="json-pointer",
         raises=jsonpointer.JsonPointerException,
     )
     def is_json_pointer(instance):
@@ -389,6 +413,8 @@ else:
     #       into a new external library.
     @_checks_drafts(
         draft7="relative-json-pointer",
+        draft201909="relative-json-pointer",
+        draft202012="relative-json-pointer",
         raises=jsonpointer.JsonPointerException,
     )
     def is_relative_json_pointer(instance):
@@ -399,6 +425,10 @@ else:
         non_negative_integer, rest = [], ""
         for i, character in enumerate(instance):
             if character.isdigit():
+                # digits with a leading "0" are not allowed
+                if i > 0 and int(instance[i - 1]) == 0:
+                    return False
+
                 non_negative_integer.append(character)
                 continue
 
@@ -410,19 +440,42 @@ else:
         return (rest == "#") or jsonpointer.JsonPointer(rest)
 
 
-try:
-    import uritemplate.exceptions
-except ImportError:
-    pass
-else:
+with suppress(ImportError):
+    import uri_template
+
     @_checks_drafts(
         draft6="uri-template",
         draft7="uri-template",
-        raises=uritemplate.exceptions.InvalidTemplate,
+        draft201909="uri-template",
+        draft202012="uri-template",
     )
-    def is_uri_template(
-        instance,
-        template_validator=uritemplate.Validator().force_balanced_braces(),
-    ):
-        template = uritemplate.URITemplate(instance)
-        return template_validator.validate(template)
+    def is_uri_template(instance):
+        if not isinstance(instance, str):
+            return True
+        return uri_template.validate(instance)
+
+
+with suppress(ImportError):
+    import isoduration
+
+    @_checks_drafts(
+        draft201909="duration",
+        draft202012="duration",
+        raises=isoduration.DurationParsingException,
+    )
+    def is_duration(instance):
+        if not isinstance(instance, str):
+            return True
+        return isoduration.parse_duration(instance)
+
+
+@_checks_drafts(
+    draft201909="uuid",
+    draft202012="uuid",
+    raises=ValueError,
+)
+def is_uuid(instance):
+    if not isinstance(instance, str):
+        return True
+    UUID(instance)
+    return all(instance[position] == "-" for position in (8, 13, 18, 23))

@@ -1,5 +1,7 @@
+from contextlib import suppress
 from datetime import datetime
-import errno
+from importlib import metadata
+from urllib.parse import urljoin
 import os
 import urllib.request
 
@@ -7,10 +9,12 @@ from docutils import nodes
 from lxml import html
 import certifi
 
-import jsonschema
+__version__ = "1.2.0"
 
-__version__ = "1.1.0"
-VALIDATION_SPEC = "https://json-schema.org/draft-07/json-schema-validation.html"
+BASE_URL = "https://json-schema.org/draft-07/"
+VALIDATION_SPEC = urljoin(BASE_URL, "json-schema-validation.html")
+REF_URL = urljoin(BASE_URL, "json-schema-core.html#rfc.section.8.3")
+SCHEMA_URL = urljoin(BASE_URL, "json-schema-core.html#rfc.section.7")
 
 
 def setup(app):
@@ -26,15 +30,11 @@ def setup(app):
 
     app.add_config_value("cache_path", "_cache", "")
 
-    try:
-        os.makedirs(app.config.cache_path)
-    except OSError as error:
-        if error.errno != errno.EEXIST:
-            raise
+    os.makedirs(app.config.cache_path, exist_ok=True)
 
     path = os.path.join(app.config.cache_path, "spec.html")
     spec = fetch_or_load(path)
-    app.add_role("validator", docutils_sucks(spec))
+    app.add_role("validator", docutils_does_not_allow_using_classes(spec))
 
     return dict(version=__version__, parallel_read_safe=True)
 
@@ -52,17 +52,15 @@ def fetch_or_load(spec_path):
 
     headers = {
         "User-Agent": "python-jsonschema v{} - documentation build v{}".format(
-            jsonschema.__version__, __version__,
+            metadata.version("jsonschema"),
+            __version__,
         ),
     }
 
-    try:
+    with suppress(FileNotFoundError):
         modified = datetime.utcfromtimestamp(os.path.getmtime(spec_path))
         date = modified.strftime("%a, %d %b %Y %I:%M:%S UTC")
         headers["If-Modified-Since"] = date
-    except OSError as error:
-        if error.errno != errno.ENOENT:
-            raise
 
     request = urllib.request.Request(VALIDATION_SPEC, headers=headers)
     response = urllib.request.urlopen(request, cafile=certifi.where())
@@ -77,17 +75,14 @@ def fetch_or_load(spec_path):
         return html.parse(spec)
 
 
-def docutils_sucks(spec):
+def docutils_does_not_allow_using_classes(spec):
     """
     Yeah.
 
-    It doesn't allow using a class because it does stupid stuff like try to set
-    attributes on the callable object rather than just keeping a dict.
+    It doesn't allow using a class because it does annoying stuff like
+    try to set attributes on the callable object rather than just
+    keeping a dict.
     """
-
-    base_url = VALIDATION_SPEC
-    ref_url = "https://json-schema.org/draft-07/json-schema-core.html#rfc.section.8.3"
-    schema_url = "https://json-schema.org/draft-07/json-schema-core.html#rfc.section.7"
 
     def validator(name, raw_text, text, lineno, inliner):
         """
@@ -124,9 +119,9 @@ def docutils_sucks(spec):
         """
 
         if text == "$ref":
-            return [nodes.reference(raw_text, text, refuri=ref_url)], []
+            return [nodes.reference(raw_text, text, refuri=REF_URL)], []
         elif text == "$schema":
-            return [nodes.reference(raw_text, text, refuri=schema_url)], []
+            return [nodes.reference(raw_text, text, refuri=SCHEMA_URL)], []
 
         # find the header in the validation spec containing matching text
         header = spec.xpath("//h1[contains(text(), '{0}')]".format(text))
@@ -135,7 +130,7 @@ def docutils_sucks(spec):
             inliner.reporter.warning(
                 "Didn't find a target for {0}".format(text),
             )
-            uri = base_url
+            uri = VALIDATION_SPEC
         else:
             if len(header) > 1:
                 inliner.reporter.info(
@@ -143,7 +138,7 @@ def docutils_sucks(spec):
                 )
 
             # get the href from link in the header
-            uri = base_url + header[0].find("a").attrib["href"]
+            uri = urljoin(VALIDATION_SPEC, header[0].find("a").attrib["href"])
 
         reference = nodes.reference(raw_text, text, refuri=uri)
         return [reference], []

@@ -41,7 +41,7 @@ class TestBestMatch(TestCase):
                 "minProperties": 2,
                 "anyOf": [{"type": "string"}, {"type": "number"}],
                 "oneOf": [{"type": "string"}, {"type": "number"}],
-            }
+            },
         )
         best = self.best_match(validator.iter_errors({}))
         self.assertEqual(best.validator, "minProperties")
@@ -209,7 +209,7 @@ class TestByRelevance(TestCase):
 
 class TestErrorTree(TestCase):
     def test_it_knows_how_many_total_errors_it_contains(self):
-        # FIXME: https://github.com/Julian/jsonschema/issues/442
+        # FIXME: #442
         errors = [
             exceptions.ValidationError("Something", validator=i)
             for i in range(8)
@@ -284,15 +284,31 @@ class TestErrorTree(TestCase):
         tree = exceptions.ErrorTree([error])
         self.assertIsInstance(tree["foo"], exceptions.ErrorTree)
 
+    def test_repr(self):
+        e1, e2 = (
+            exceptions.ValidationError(
+                "1",
+                validator="foo",
+                path=["bar", "bar2"],
+                instance="i1"),
+            exceptions.ValidationError(
+                "2",
+                validator="quux",
+                path=["foobar", 2],
+                instance="i2"),
+        )
+        tree = exceptions.ErrorTree([e1, e2])
+        self.assertEqual(repr(tree), "<ErrorTree (2 total errors)>")
+
 
 class TestErrorInitReprStr(TestCase):
     def make_error(self, **kwargs):
         defaults = dict(
-            message=u"hello",
-            validator=u"type",
-            validator_value=u"string",
+            message="hello",
+            validator="type",
+            validator_value="string",
             instance=5,
-            schema={u"type": u"string"},
+            schema={"type": "string"},
         )
         defaults.update(kwargs)
         return exceptions.ValidationError(**defaults)
@@ -312,7 +328,7 @@ class TestErrorInitReprStr(TestCase):
     def test_repr(self):
         self.assertEqual(
             repr(exceptions.ValidationError(message="Hello!")),
-            "<ValidationError: %r>" % "Hello!",
+            "<ValidationError: 'Hello!'>",
         )
 
     def test_unset_error(self):
@@ -367,8 +383,8 @@ class TestErrorInitReprStr(TestCase):
             On instance[0]['a']:
                 5
             """,
-            path=[0, u"a"],
-            schema_path=[u"items", 0, 1],
+            path=[0, "a"],
+            schema_path=["items", 0, 1],
         )
 
     def test_uses_pprint(self):
@@ -425,14 +441,14 @@ class TestErrorInitReprStr(TestCase):
             """,
             instance=list(range(25)),
             schema=dict(zip(range(20), range(20))),
-            validator=u"maxLength",
+            validator="maxLength",
         )
 
     def test_str_works_with_instances_having_overriden_eq_operator(self):
         """
-        Check for https://github.com/Julian/jsonschema/issues/164 which
-        rendered exceptions unusable when a `ValidationError` involved
-        instances with an `__eq__` method that returned truthy values.
+        Check for #164 which rendered exceptions unusable when a
+        `ValidationError` involved instances with an `__eq__` method
+        that returned truthy values.
         """
 
         class DontEQMeBro(object):

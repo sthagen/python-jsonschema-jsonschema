@@ -1,5 +1,5 @@
 # this appears to be misinterpreting Napoleon types as prose, sigh...
-IValidator
+Validator
 TypeChecker
 UnknownType
 ValidationError
@@ -25,6 +25,7 @@ pre
 programmatically
 recurses
 regex
+repr
 sensical
 subschema
 subschemas
@@ -39,5 +40,5 @@ Zac
 HD
 
 Berman
-Freenode
+Libera
 GPL

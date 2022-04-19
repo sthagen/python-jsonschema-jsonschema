@@ -3,6 +3,7 @@ Python representations of the JSON Schema Test Suite tests.
 """
 
 from functools import partial
+from pathlib import Path
 import json
 import os
 import re
@@ -10,14 +11,9 @@ import subprocess
 import sys
 import unittest
 
-try:
-    from pathlib import Path
-except ImportError:
-    from pathlib2 import Path
-
 import attr
 
-from jsonschema.validators import validators
+from jsonschema.validators import _VALIDATORS
 import jsonschema
 
 
@@ -50,15 +46,15 @@ class Suite(object):
             [sys.executable, str(jsonschema_suite), "remotes"],
         )
         return {
-            "http://localhost:1234/" + name: schema
+            "http://localhost:1234/" + name.replace("\\", "/"): schema
             for name, schema in json.loads(remotes.decode("utf-8")).items()
         }
 
     def benchmark(self, runner):  # pragma: no cover
-        for name in validators:
+        for name, Validator in _VALIDATORS.items():
             self.version(name=name).benchmark(
                 runner=runner,
-                Validator=validators[name],
+                Validator=Validator,
             )
 
     def version(self, name):
@@ -106,12 +102,6 @@ class Version(object):
             )
         )
 
-    def tests_of(self, name):
-        return self._tests_in(
-            subject=name,
-            path=self._path / (name + ".json"),
-        )
-
     def optional_tests_of(self, name):
         return self._tests_in(
             subject=name,
@@ -119,7 +109,7 @@ class Version(object):
         )
 
     def to_unittest_testcase(self, *suites, **kwargs):
-        name = kwargs.pop("name", "Test" + self.name.title())
+        name = kwargs.pop("name", "Test" + self.name.title().replace("-", ""))
         methods = {
             test.method_name: test.to_unittest_method(**kwargs)
             for suite in suites
@@ -147,7 +137,7 @@ class Version(object):
                     case_description=each["description"],
                     schema=each["schema"],
                     remotes=self._remotes,
-                    **test
+                    **test,
                 ) for test in each["tests"]
             )
 
@@ -181,13 +171,13 @@ class _Test(object):
                 self.subject,
                 self.case_description,
                 self.description,
-            ]
+            ],
         )
 
     @property
     def method_name(self):
         delimiters = r"[\W\- ]+"
-        return "test_%s_%s_%s" % (
+        return "test_{}_{}_{}".format(
             re.sub(delimiters, "_", self.subject),
             re.sub(delimiters, "_", self.case_description),
             re.sub(delimiters, "_", self.description),
@@ -212,13 +202,8 @@ class _Test(object):
             store=self._remotes,
             id_of=Validator.ID_OF,
         )
-        jsonschema.validate(
-            instance=self.data,
-            schema=self.schema,
-            cls=Validator,
-            resolver=resolver,
-            **kwargs
-        )
+        validator = Validator(schema=self.schema, resolver=resolver, **kwargs)
+        validator.validate(instance=self.data)
 
     def validate_ignoring_errors(self, Validator):  # pragma: no cover
         try:

@@ -5,17 +5,20 @@ The ``jsonschema`` command line.
 from json import JSONDecodeError
 from textwrap import dedent
 import argparse
-import errno
 import json
 import sys
 import traceback
 
+try:
+    from importlib import metadata
+except ImportError:
+    import importlib_metadata as metadata  # type: ignore
+
 import attr
 
-from jsonschema import __version__
 from jsonschema._reflect import namedAny
 from jsonschema.exceptions import SchemaError
-from jsonschema.validators import validator_for
+from jsonschema.validators import RefResolver, validator_for
 
 
 class _CannotLoadFile(Exception):
@@ -40,9 +43,7 @@ class _Outputter(object):
     def load(self, path):
         try:
             file = open(path)
-        except (IOError, OSError) as error:
-            if error.errno != errno.ENOENT:
-                raise
+        except FileNotFoundError:
             self.filenotfound_error(path=path, exc_info=sys.exc_info())
             raise _CannotLoadFile()
 
@@ -156,7 +157,7 @@ parser.add_argument(
         one formatted object named 'error' for each ValidationError.
         Only provide this option when using --output=plain, which is the
         default. If this argument is unprovided and --output=plain is
-        used, a simple default representation will be used."
+        used, a simple default representation will be used.
     """,
 )
 parser.add_argument(
@@ -179,9 +180,17 @@ parser.add_argument(
     """,
 )
 parser.add_argument(
+    "--base-uri",
+    help="""
+        a base URI to assign to the provided schema, even if it does not
+        declare one (via e.g. $id). This option can be used if you wish to
+        resolve relative references to a particular URI (or local path)
+    """,
+)
+parser.add_argument(
     "--version",
     action="version",
-    version=__version__,
+    version=metadata.version("jsonschema"),
 )
 parser.add_argument(
     "schema",
@@ -193,7 +202,7 @@ def parse_args(args):
     arguments = vars(parser.parse_args(args=args or ["--help"]))
     if arguments["output"] != "plain" and arguments["error_format"]:
         raise parser.error(
-            "--error-format can only be used with --output plain"
+            "--error-format can only be used with --output plain",
         )
     if arguments["output"] == "plain" and arguments["error_format"] is None:
         arguments["error_format"] = "{error.instance}: {error.message}\n"
@@ -252,7 +261,12 @@ def run(arguments, stdout=sys.stdout, stderr=sys.stderr, stdin=sys.stdin):
                 raise _CannotLoadFile()
         instances = ["<stdin>"]
 
-    validator = arguments["validator"](schema)
+    resolver = RefResolver(
+        base_uri=arguments["base_uri"],
+        referrer=schema,
+    ) if arguments["base_uri"] is not None else None
+
+    validator = arguments["validator"](schema, resolver=resolver)
     exit_code = 0
     for each in instances:
         try:
