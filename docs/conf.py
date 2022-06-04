@@ -25,6 +25,7 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinx.ext.napoleon",
     "sphinx.ext.viewcode",
+    "sphinx_autodoc_typehints",
     "sphinxcontrib.spelling",
     "jsonschema_role",
 ]
@@ -239,6 +240,7 @@ def entire_domain(host):
 
 
 linkcheck_ignore = [
+    entire_domain("img.shields.io"),
     "https://github.com/python-jsonschema/jsonschema/actions",
     "https://github.com/python-jsonschema/jsonschema/workflows/CI/badge.svg",
 ]
