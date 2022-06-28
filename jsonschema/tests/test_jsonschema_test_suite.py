@@ -186,7 +186,6 @@ TestDraft4 = DRAFT4.to_unittest_testcase(
     DRAFT4.format_tests(),
     DRAFT4.optional_tests_of(name="bignum"),
     DRAFT4.optional_tests_of(name="float-overflow"),
-    DRAFT4.optional_tests_of(name="future-keywords"),
     DRAFT4.optional_tests_of(name="non-bmp-regex"),
     DRAFT4.optional_tests_of(name="zeroTerminatedFloats"),
     Validator=Draft4Validator,
@@ -250,7 +249,6 @@ TestDraft6 = DRAFT6.to_unittest_testcase(
     DRAFT6.optional_tests_of(name="bignum"),
     DRAFT6.optional_tests_of(name="float-overflow"),
     DRAFT6.optional_tests_of(name="non-bmp-regex"),
-    DRAFT6.optional_tests_of(name="future-keywords"),
     Validator=Draft6Validator,
     format_checker=draft6_format_checker,
     skip=lambda test: (
@@ -291,7 +289,6 @@ TestDraft7 = DRAFT7.to_unittest_testcase(
     DRAFT7.optional_tests_of(name="bignum"),
     DRAFT7.optional_tests_of(name="content"),
     DRAFT7.optional_tests_of(name="float-overflow"),
-    DRAFT7.optional_tests_of(name="future-keywords"),
     DRAFT7.optional_tests_of(name="non-bmp-regex"),
     Validator=Draft7Validator,
     format_checker=draft7_format_checker,
@@ -351,7 +348,6 @@ TestDraft201909 = DRAFT201909.to_unittest_testcase(
     DRAFT201909.tests(),
     DRAFT201909.optional_tests_of(name="bignum"),
     DRAFT201909.optional_tests_of(name="float-overflow"),
-    DRAFT201909.optional_tests_of(name="future-keywords"),
     DRAFT201909.optional_tests_of(name="non-bmp-regex"),
     DRAFT201909.optional_tests_of(name="refOfUnknownKeyword"),
     Validator=Draft201909Validator,
@@ -363,6 +359,18 @@ TestDraft201909 = DRAFT201909.to_unittest_testcase(
         or skip(
             message="dynamicRef support isn't working yet.",
             subject="recursiveRef",
+        )(test)
+        or skip(
+            message="These tests depends on dynamicRef working.",
+            subject="id",
+            case_description=(
+                "Invalid use of fragments in location-independent $id"
+            ),
+        )(test)
+        or skip(
+            message="These tests depends on dynamicRef working.",
+            subject="defs",
+            description="invalid definition schema",
         )(test)
         or skip(
             message="These tests depends on dynamicRef working.",
