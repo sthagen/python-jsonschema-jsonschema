@@ -1,3 +1,21 @@
+v4.9.0
+------
+
+* ``pkgutil.resolve_name`` is now used to retrieve validators
+  provided on the command line. This function is only available on
+  3.9+, so 3.7 and 3.8 (which are still supported) now rely on the
+  `pkgutil_resolve_name <https://pypi.org/project/pkgutil_resolve_name/>`_
+  backport package. Note however that the CLI itself is due
+  to be deprecated shortly in favor of `check-jsonschema
+  <https://github.com/python-jsonschema/check-jsonschema>`_.
+
+v4.8.0
+------
+
+* ``best_match`` no longer traverses into ``anyOf`` and ``oneOf`` when all of
+  the errors within them seem equally applicable. This should lead to clearer
+  error messages in some cases where no branches were matched.
+
 v4.7.2
 ------
 
