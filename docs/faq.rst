@@ -150,9 +150,9 @@ this code, we add the default properties to each object *before* the
 properties are validated, so the default values themselves will need to
 be valid under the schema.)
 
-    .. code-block:: python
+    .. testcode::
 
-        from jsonschema import Draft7Validator, validators
+        from jsonschema import Draft202012Validator, validators
 
 
         def extend_with_default(validator_class):
@@ -173,21 +173,21 @@ be valid under the schema.)
             )
 
 
-        DefaultValidatingDraft7Validator = extend_with_default(Draft7Validator)
+        DefaultValidatingValidator = extend_with_default(Draft202012Validator)
 
 
         # Example usage:
         obj = {}
         schema = {'properties': {'foo': {'default': 'bar'}}}
-        # Note jsonschem.validate(obj, schema, cls=DefaultValidatingDraft7Validator)
+        # Note jsonschem.validate(obj, schema, cls=DefaultValidatingValidator)
         # will not work because the metaschema contains `default` directives.
-        DefaultValidatingDraft7Validator(schema).validate(obj)
+        DefaultValidatingValidator(schema).validate(obj)
         assert obj == {'foo': 'bar'}
 
 
 See the above-linked document for more info on how this works, but
 basically, it just extends the :validator:`properties` validator on
-a `jsonschema.Draft7Validator` to then go ahead and update all the
+a `jsonschema.Draft202012Validator` to then go ahead and update all the
 defaults.
 
 .. note::
@@ -205,7 +205,7 @@ defaults.
     all of its properties, but only if your schema provides a default
     value for the object itself, like so:
 
-    .. code-block:: python
+    .. testcode::
 
         schema = {
             "type": "object",
@@ -224,18 +224,18 @@ defaults.
         }
 
         obj = {}
-        DefaultValidatingDraft7Validator(schema).validate(obj)
+        DefaultValidatingValidator(schema).validate(obj)
         assert obj == {'outer-object': {'inner-object': 'INNER-DEFAULT'}}
 
     ...but if you don't provide a default value for your object, then
     it won't be instantiated at all, much less populated with default
     properties.
 
-    .. code-block:: python
+    .. testcode::
 
         del schema["properties"]["outer-object"]["default"]
         obj2 = {}
-        DefaultValidatingDraft7Validator(schema).validate(obj2)
+        DefaultValidatingValidator(schema).validate(obj2)
         assert obj2 == {} # whoops
 
 
