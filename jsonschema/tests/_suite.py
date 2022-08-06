@@ -194,7 +194,12 @@ class _Test(object):
 
         fn.__name__ = self.method_name
         reason = skip(self)
-        return unittest.skipIf(reason is not None, reason)(fn)
+        if reason is None:
+            return fn
+        elif os.environ.get("JSON_SCHEMA_EXPECTED_FAILURES", "0") != "0":
+            return unittest.expectedFailure(fn)
+        else:
+            return unittest.skip(reason)(fn)
 
     def validate(self, Validator, **kwargs):
         Validator.check_schema(self.schema)
@@ -203,7 +208,17 @@ class _Test(object):
             store=self._remotes,
             id_of=Validator.ID_OF,
         )
+
+        # XXX: #693 asks to improve the public API for this, since yeah, it's
+        #      bad. Figures that since it's hard for end-users, we experience
+        #      the pain internally here too.
+        def prevent_network_access(*args, **kwargs):
+            raise RuntimeError("Tried to access the network!")
+        resolver.resolve_remote = prevent_network_access
+
         validator = Validator(schema=self.schema, resolver=resolver, **kwargs)
+        if os.environ.get("JSON_SCHEMA_DEBUG", "0") != "0":
+            breakpoint()
         validator.validate(instance=self.data)
 
     def validate_ignoring_errors(self, Validator):  # pragma: no cover
