@@ -36,7 +36,7 @@ def _find_suite():
 
 
 @attr.s(hash=True)
-class Suite(object):
+class Suite:
 
     _root = attr.ib(default=attr.Factory(_find_suite))
 
@@ -45,10 +45,7 @@ class Suite(object):
         remotes = subprocess.check_output(
             [sys.executable, str(jsonschema_suite), "remotes"],
         )
-        return {
-            "http://localhost:1234/" + name.replace("\\", "/"): schema
-            for name, schema in json.loads(remotes.decode("utf-8")).items()
-        }
+        return json.loads(remotes.decode("utf-8"))
 
     def benchmark(self, runner):  # pragma: no cover
         for name, Validator in _VALIDATORS.items():
@@ -66,7 +63,7 @@ class Suite(object):
 
 
 @attr.s(hash=True)
-class Version(object):
+class Version:
 
     _path = attr.ib()
     _remotes = attr.ib()
@@ -143,7 +140,7 @@ class Version(object):
 
 
 @attr.s(hash=True, repr=False)
-class _Test(object):
+class _Test:
 
     version = attr.ib()
 
@@ -212,8 +209,8 @@ class _Test(object):
         # XXX: #693 asks to improve the public API for this, since yeah, it's
         #      bad. Figures that since it's hard for end-users, we experience
         #      the pain internally here too.
-        def prevent_network_access(*args, **kwargs):
-            raise RuntimeError("Tried to access the network!")
+        def prevent_network_access(uri):
+            raise RuntimeError(f"Tried to access the network: {uri}")
         resolver.resolve_remote = prevent_network_access
 
         validator = Validator(schema=self.schema, resolver=resolver, **kwargs)

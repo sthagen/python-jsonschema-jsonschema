@@ -91,6 +91,22 @@ Installation
     $ pip install jsonschema
 
 
+Extras
+======
+
+Two extras are available when installing the package, both currently related to ``format`` validation:
+
+    * ``format``
+    * ``format-nongpl``
+
+They can be used when installing in order to include additional dependencies, e.g.:
+
+.. code-block:: bash
+
+    $ pip install jsonschema'[format]'
+
+.. start cut from PyPI
+
 Running the Test Suite
 ----------------------
 
@@ -124,6 +140,8 @@ schemas can be found there.
 
 Otherwise, asking questions on Stack Overflow is another means of
 getting help if you're stuck.
+
+.. end cut from PyPI
 
 
 About

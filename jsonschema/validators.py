@@ -27,6 +27,8 @@ from jsonschema import (
     exceptions,
 )
 
+_UNSET = _utils.Unset()
+
 _VALIDATORS: dict[str, typing.Any] = {}
 _META_SCHEMAS = _utils.URIDict()
 _VOCABULARIES: list[tuple[str, typing.Any]] = []
@@ -66,7 +68,7 @@ def validates(version):
     Register the decorated validator for a ``version`` of the specification.
 
     Registered validators and their meta schemas will be considered when
-    parsing ``$schema`` properties' URIs.
+    parsing :kw:`$schema` keywords' URIs.
 
     Arguments:
 
@@ -147,15 +149,14 @@ def create(
 
         type_checker (jsonschema.TypeChecker):
 
-            a type checker, used when applying the :validator:`type` validator.
+            a type checker, used when applying the :kw:`type` keyword.
 
             If unprovided, a `jsonschema.TypeChecker` will be created
             with a set of default types typical of JSON Schema drafts.
 
         format_checker (jsonschema.FormatChecker):
 
-            a format checker, used when applying the :validator:`format`
-            validator.
+            a format checker, used when applying the :kw:`format` keyword.
 
             If unprovided, a `jsonschema.FormatChecker` will be created
             with a set of default formats typical of JSON Schema drafts.
@@ -166,9 +167,9 @@ def create(
 
         applicable_validators (collections.abc.Callable):
 
-            A function that given a schema, returns the list of applicable
-            validators (names and callables) which will be called to
-            validate the instance.
+            A function that given a schema, returns the list of
+            applicable validators (validation keywords and callables)
+            which will be used to validate the instance.
 
     Returns:
 
@@ -189,7 +190,21 @@ def create(
         schema = attr.ib(repr=reprlib.repr)
         resolver = attr.ib(default=None, repr=False)
         format_checker = attr.ib(default=None)
-        evolve = attr.evolve
+
+        def __init_subclass__(cls):
+            warnings.warn(
+                (
+                    "Subclassing validator classes is not intended to "
+                    "be part of their public API. A future version "
+                    "will make doing so an error, as the behavior of "
+                    "subclasses isn't guaranteed to stay the same "
+                    "between releases of jsonschema. Instead, prefer "
+                    "composition of validators, wrapping them in an object "
+                    "owned entirely by the downstream library."
+                ),
+                DeprecationWarning,
+                stacklevel=2,
+            )
 
         def __attrs_post_init__(self):
             if self.resolver is None:
@@ -200,8 +215,27 @@ def create(
 
         @classmethod
         def check_schema(cls, schema):
-            for error in cls(cls.META_SCHEMA).iter_errors(schema):
+            Validator = validator_for(cls.META_SCHEMA, default=cls)
+            for error in Validator(cls.META_SCHEMA).iter_errors(schema):
                 raise exceptions.SchemaError.create_from(error)
+
+        def evolve(self, **changes):
+            # Essentially reproduces attr.evolve, but may involve instantiating
+            # a different class than this one.
+            cls = self.__class__
+
+            schema = changes.setdefault("schema", self.schema)
+            NewValidator = validator_for(schema, default=cls)
+
+            for field in attr.fields(cls):
+                if not field.init:
+                    continue
+                attr_name = field.name  # To deal with private attributes.
+                init_name = attr_name if attr_name[0] != "_" else attr_name[1:]
+                if init_name not in changes:
+                    changes[init_name] = getattr(self, attr_name)
+
+            return NewValidator(**changes)
 
         def iter_errors(self, instance, _schema=None):
             if _schema is not None:
@@ -330,7 +364,7 @@ def extend(
                 If you wish to instead extend the behavior of a parent's
                 validator callable, delegate and call it directly in
                 the new validator function by retrieving it using
-                ``OldValidator.VALIDATORS["validator_name"]``.
+                ``OldValidator.VALIDATORS["validation_keyword_name"]``.
 
         version (str):
 
@@ -338,15 +372,14 @@ def extend(
 
         type_checker (jsonschema.TypeChecker):
 
-            a type checker, used when applying the :validator:`type` validator.
+            a type checker, used when applying the :kw:`type` keyword.
 
             If unprovided, the type checker of the extended
             `jsonschema.protocols.Validator` will be carried along.
 
         format_checker (jsonschema.FormatChecker):
 
-            a format checker, used when applying the :validator:`format`
-            validator.
+            a format checker, used when applying the :kw:`format` keyword.
 
             If unprovided, the format checker of the extended
             `jsonschema.protocols.Validator` will be carried along.
@@ -572,7 +605,7 @@ Draft201909Validator = create(
         "propertyNames": _validators.propertyNames,
         "required": _validators.required,
         "type": _validators.type,
-        "unevaluatedItems": _validators.unevaluatedItems,
+        "unevaluatedItems": _legacy_validators.unevaluatedItems_draft2019,
         "unevaluatedProperties": _validators.unevaluatedProperties,
         "uniqueItems": _validators.uniqueItems,
     },
@@ -630,7 +663,7 @@ Draft202012Validator = create(
 _LATEST_VERSION = Draft202012Validator
 
 
-class RefResolver(object):
+class RefResolver:
     """
     Resolve JSON References.
 
@@ -1032,22 +1065,24 @@ def validate(instance, schema, cls=None, *args, **kwargs):
 
     If the ``cls`` argument is not provided, two things will happen
     in accordance with the specification. First, if the schema has a
-    :validator:`$schema` property containing a known meta-schema [#]_
-    then the proper validator will be used. The specification recommends
-    that all schemas contain :validator:`$schema` properties for this
-    reason. If no :validator:`$schema` property is found, the default
-    validator class is the latest released draft.
+    :kw:`$schema` keyword containing a known meta-schema [#]_ then the
+    proper validator will be used. The specification recommends that
+    all schemas contain :kw:`$schema` properties for this reason. If no
+    :kw:`$schema` property is found, the default validator class is the
+    latest released draft.
 
     Any other provided positional and keyword arguments will be passed
     on when instantiating the ``cls``.
 
     Raises:
 
-        `jsonschema.exceptions.ValidationError` if the instance
-            is invalid
+        `jsonschema.exceptions.ValidationError`:
 
-        `jsonschema.exceptions.SchemaError` if the schema itself
-            is invalid
+            if the instance is invalid
+
+        `jsonschema.exceptions.SchemaError`:
+
+            if the schema itself is invalid
 
     .. rubric:: Footnotes
     .. [#] known by a validator registered with
@@ -1063,12 +1098,12 @@ def validate(instance, schema, cls=None, *args, **kwargs):
         raise error
 
 
-def validator_for(schema, default=_LATEST_VERSION):
+def validator_for(schema, default=_UNSET):
     """
     Retrieve the validator class appropriate for validating the given schema.
 
-    Uses the :validator:`$schema` property that should be present in the
-    given schema to look up the appropriate validator class.
+    Uses the :kw:`$schema` keyword that should be present in the given
+    schema to look up the appropriate validator class.
 
     Arguments:
 
@@ -1084,16 +1119,20 @@ def validator_for(schema, default=_LATEST_VERSION):
             If unprovided, the default is to return the latest supported
             draft.
     """
+
+    DefaultValidator = _LATEST_VERSION if default is _UNSET else default
+
     if schema is True or schema is False or "$schema" not in schema:
-        return default
+        return DefaultValidator
     if schema["$schema"] not in _META_SCHEMAS:
-        warn(
-            (
-                "The metaschema specified by $schema was not found. "
-                "Using the latest draft to validate, but this will raise "
-                "an error in the future."
-            ),
-            DeprecationWarning,
-            stacklevel=2,
-        )
-    return _META_SCHEMAS.get(schema["$schema"], _LATEST_VERSION)
+        if default is _UNSET:
+            warn(
+                (
+                    "The metaschema specified by $schema was not found. "
+                    "Using the latest draft to validate, but this will raise "
+                    "an error in the future."
+                ),
+                DeprecationWarning,
+                stacklevel=2,
+            )
+    return _META_SCHEMAS.get(schema["$schema"], DefaultValidator)

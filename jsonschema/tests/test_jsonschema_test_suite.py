@@ -8,7 +8,7 @@ See https://github.com/json-schema-org/JSON-Schema-Test-Suite for details.
 
 import sys
 
-from jsonschema.tests._helpers import bug, test_suite_bug
+from jsonschema.tests._helpers import bug
 from jsonschema.tests._suite import Suite
 import jsonschema
 
@@ -264,6 +264,7 @@ TestDraft7 = DRAFT7.to_unittest_testcase(
     DRAFT7.format_tests(),
     DRAFT7.optional_tests_of(name="bignum"),
     DRAFT7.optional_tests_of(name="content"),
+    DRAFT7.optional_tests_of(name="cross-draft"),
     DRAFT7.optional_tests_of(name="float-overflow"),
     DRAFT7.optional_tests_of(name="non-bmp-regex"),
     Validator=jsonschema.Draft7Validator,
@@ -323,67 +324,13 @@ TestDraft7 = DRAFT7.to_unittest_testcase(
 TestDraft201909 = DRAFT201909.to_unittest_testcase(
     DRAFT201909.tests(),
     DRAFT201909.optional_tests_of(name="bignum"),
+    DRAFT201909.optional_tests_of(name="cross-draft"),
     DRAFT201909.optional_tests_of(name="float-overflow"),
     DRAFT201909.optional_tests_of(name="non-bmp-regex"),
     DRAFT201909.optional_tests_of(name="refOfUnknownKeyword"),
     Validator=jsonschema.Draft201909Validator,
     skip=lambda test: (
         skip(
-            message="unevaluatedItems is different in 2019-09 (needs work).",
-            subject="unevaluatedItems",
-            description="uncle keyword evaluation is not significant",
-        )(test)
-        or skip(
-            message="unevaluatedItems is different in 2019-09 (needs work).",
-            subject="unevaluatedItems",
-            description="when one schema matches and has unevaluated items",
-        )(test)
-        or skip(
-            message="unevaluatedItems is different in 2019-09 (needs work).",
-            subject="unevaluatedItems",
-            description="when two schemas match and has unevaluated items",
-        )(test)
-        or skip(
-            message="unevaluatedItems is different in 2019-09 (needs work).",
-            subject="unevaluatedItems",
-            description="when if matches and it has unevaluated items",
-        )(test)
-        or skip(
-            message="unevaluatedItems is different in 2019-09 (needs work).",
-            subject="unevaluatedItems",
-            case_description="unevaluatedItems with nested tuple",
-            description="with unevaluated items",
-        )(test)
-        or skip(
-            message="unevaluatedItems is different in 2019-09 (needs work).",
-            subject="unevaluatedItems",
-            case_description="unevaluatedItems with not",
-            description="with unevaluated items",
-        )(test)
-        or skip(
-            message="unevaluatedItems is different in 2019-09 (needs work).",
-            subject="unevaluatedItems",
-            case_description="unevaluatedItems with oneOf",
-            description="with unevaluated items",
-        )(test)
-        or skip(
-            message="unevaluatedItems is different in 2019-09 (needs work).",
-            subject="unevaluatedItems",
-            case_description="unevaluatedItems with $ref",
-            description="with unevaluated items",
-        )(test)
-        or skip(
-            message="unevaluatedItems is different in 2019-09 (needs work).",
-            subject="unevaluatedItems",
-            case_description="unevaluatedItems with tuple",
-            description="with unevaluated items",
-        )(test)
-        or skip(
-            message="unevaluatedItems is different in 2019-09 (needs work).",
-            subject="unevaluatedItems",
-            description="when if doesn't match and it has unevaluated items",
-        )(test)
-        or skip(
             message="recursiveRef support isn't working yet.",
             subject="recursiveRef",
             case_description=(
@@ -472,7 +419,7 @@ TestDraft201909 = DRAFT201909.to_unittest_testcase(
             case_description="same $anchor with different base uri",
         )(test)
         or skip(
-            message=test_suite_bug(574),
+            message="Vocabulary support is still in-progress.",
             subject="vocabulary",
             description=(
                 "no validation: invalid number, but it still validates"
@@ -507,6 +454,7 @@ TestDraft201909Format = DRAFT201909.to_unittest_testcase(
 TestDraft202012 = DRAFT202012.to_unittest_testcase(
     DRAFT202012.tests(),
     DRAFT202012.optional_tests_of(name="bignum"),
+    DRAFT202012.optional_tests_of(name="cross-draft"),
     DRAFT202012.optional_tests_of(name="float-overflow"),
     DRAFT202012.optional_tests_of(name="non-bmp-regex"),
     DRAFT202012.optional_tests_of(name="refOfUnknownKeyword"),
@@ -591,7 +539,7 @@ TestDraft202012 = DRAFT202012.to_unittest_testcase(
             case_description="same $anchor with different base uri",
         )(test)
         or skip(
-            message=test_suite_bug(574),
+            message="Vocabulary support is still in-progress.",
             subject="vocabulary",
             description=(
                 "no validation: invalid number, but it still validates"
