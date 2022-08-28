@@ -1,3 +1,11 @@
+v4.15.0
+=======
+
+* ``$ref`` on earlier drafts (specifically draft 7 and 6) has been "fixed" to
+  follow the specified behavior when present alongside a sibling ``$id``.
+  Specifically the ID is now properly ignored, and references are resolved
+  against whatever resolution scope was previously relevant.
+
 v4.14.0
 =======
 
@@ -5,6 +13,7 @@ v4.14.0
   an instance of ``FormatChecker`` instead.
 * ``unevaluatedItems`` has been fixed for draft 2019. It's nonetheless
   discouraged to use draft 2019 for any schemas, new or old.
+* Fix a number of minor annotation issues in ``protocols.Validator``
 
 v4.13.0
 =======
