@@ -7,6 +7,8 @@ ValidationError
 # 0th, sigh...
 th
 callables
+# non-codeblocked cls from autoapi
+cls
 deque
 dereferences
 deserialize
@@ -33,6 +35,9 @@ regex
 repr
 runtime
 sensical
+subclassing
+submodule
+submodules
 subschema
 subschemas
 subscopes

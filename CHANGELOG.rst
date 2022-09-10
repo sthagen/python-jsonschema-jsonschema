@@ -1,6 +1,17 @@
+v4.16.0
+=======
+
+* Improve the base URI behavior when resolving a ``$ref`` to a resolution URI
+  which is different from the resolved schema's declared ``$id``.
+* Accessing ``jsonschema.draftN_format_checker`` is deprecated. Instead, if you
+  want access to the format checker itself, it is exposed as
+  ``jsonschema.validators.DraftNValidator.FORMAT_CHECKER`` on any
+  ``jsonschema.protocols.Validator``.
+
 v4.15.0
 =======
 
+* A specific API Reference page is now present in the documentation.
 * ``$ref`` on earlier drafts (specifically draft 7 and 6) has been "fixed" to
   follow the specified behavior when present alongside a sibling ``$id``.
   Specifically the ID is now properly ignored, and references are resolved
