@@ -11,6 +11,7 @@ import warnings
 from jsonschema.exceptions import FormatError
 
 _FormatCheckCallable = typing.Callable[[object], bool]
+#: A format checker callable.
 _F = typing.TypeVar("_F", bound=_FormatCheckCallable)
 _RaisesType = typing.Union[
     typing.Type[Exception], typing.Tuple[typing.Type[Exception], ...],
@@ -454,6 +455,9 @@ with suppress(ImportError):
         # https://tools.ietf.org/html/draft-handrews-relative-json-pointer-01#section-3
         if not isinstance(instance, str):
             return True
+        if not instance:
+            return False
+
         non_negative_integer, rest = [], ""
         for i, character in enumerate(instance):
             if character.isdigit():
@@ -498,7 +502,9 @@ with suppress(ImportError):
     def is_duration(instance: object) -> bool:
         if not isinstance(instance, str):
             return True
-        return bool(isoduration.parse_duration(instance))
+        isoduration.parse_duration(instance)
+        # FIXME: See bolsote/isoduration#25 and bolsote/isoduration#21
+        return instance.endswith(tuple("DMYWHMS"))
 
 
 @_checks_drafts(
