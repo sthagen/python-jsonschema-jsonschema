@@ -4,7 +4,7 @@ Creation and extension of validators, with implementations for existing drafts.
 from __future__ import annotations
 
 from collections import deque
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from functools import lru_cache
 from operator import methodcaller
 from urllib.parse import unquote, urldefrag, urljoin, urlsplit
@@ -13,16 +13,19 @@ from warnings import warn
 import contextlib
 import json
 import reprlib
-import typing
 import warnings
 
-from pyrsistent import m
-import attr
+from attrs import define, field, fields
+from jsonschema_specifications import REGISTRY as SPECIFICATIONS
+from referencing import Specification
+from rpds import HashTrieMap
+import referencing.jsonschema
 
 from jsonschema import (
     _format,
     _legacy_validators,
     _types,
+    _typing,
     _utils,
     _validators,
     exceptions,
@@ -33,7 +36,6 @@ _UNSET = _utils.Unset()
 
 _VALIDATORS: dict[str, Validator] = {}
 _META_SCHEMAS = _utils.URIDict()
-_VOCABULARIES: list[tuple[str, typing.Any]] = []
 
 
 def __getattr__(name):
@@ -62,6 +64,13 @@ def __getattr__(name):
             stacklevel=2,
         )
         return _META_SCHEMAS
+    elif name == "RefResolver":
+        warnings.warn(
+            _RefResolver._DEPRECATION_MESSAGE,
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return _RefResolver
     raise AttributeError(f"module {__name__} has no attribute {name}")
 
 
@@ -93,46 +102,30 @@ def validates(version):
     return _validates
 
 
-def _id_of(schema):
-    """
-    Return the ID of a schema for recent JSON Schema drafts.
-    """
-    if schema is True or schema is False:
-        return ""
-    return schema.get("$id", "")
-
-
-def _store_schema_list():
-    if not _VOCABULARIES:
-        package = _utils.resources.files(__package__)
-        for version in package.joinpath("schemas", "vocabularies").iterdir():
-            for path in version.iterdir():
-                vocabulary = json.loads(path.read_text())
-                _VOCABULARIES.append((vocabulary["$id"], vocabulary))
-    return [
-        (id, validator.META_SCHEMA) for id, validator in _META_SCHEMAS.items()
-    ] + _VOCABULARIES
-
-
 def create(
-    meta_schema,
-    validators=(),
-    version=None,
-    type_checker=_types.draft202012_type_checker,
-    format_checker=_format.draft202012_format_checker,
-    id_of=_id_of,
-    applicable_validators=methodcaller("items"),
+    meta_schema: referencing.jsonschema.ObjectSchema,
+    validators: (
+        Mapping[str, _typing.SchemaKeywordValidator]
+        | Iterable[tuple[str, _typing.SchemaKeywordValidator]]
+    ) = (),
+    version: str | None = None,
+    type_checker: _types.TypeChecker = _types.draft202012_type_checker,
+    format_checker: _format.FormatChecker = _format.draft202012_format_checker,
+    id_of: _typing.id_of = referencing.jsonschema.DRAFT202012.id_of,
+    applicable_validators: _typing.ApplicableValidators = methodcaller(
+        "items",
+    ),
 ):
     """
     Create a new validator class.
 
     Arguments:
 
-        meta_schema (collections.abc.Mapping):
+        meta_schema:
 
             the meta schema for the new validator class
 
-        validators (collections.abc.Mapping):
+        validators:
 
             a mapping from names to callables, where each callable will
             validate the schema property with the given name.
@@ -145,7 +138,7 @@ def create(
                 3. the instance
                 4. the schema
 
-        version (str):
+        version:
 
             an identifier for the version that this validator class will
             validate. If provided, the returned validator class will
@@ -153,29 +146,34 @@ def create(
             will have `jsonschema.validators.validates` automatically
             called for the given version.
 
-        type_checker (jsonschema.TypeChecker):
+        type_checker:
 
             a type checker, used when applying the :kw:`type` keyword.
 
             If unprovided, a `jsonschema.TypeChecker` will be created
             with a set of default types typical of JSON Schema drafts.
 
-        format_checker (jsonschema.FormatChecker):
+        format_checker:
 
             a format checker, used when applying the :kw:`format` keyword.
 
             If unprovided, a `jsonschema.FormatChecker` will be created
             with a set of default formats typical of JSON Schema drafts.
 
-        id_of (collections.abc.Callable):
+        id_of:
 
             A function that given a schema, returns its ID.
 
-        applicable_validators (collections.abc.Callable):
+        applicable_validators:
 
-            A function that given a schema, returns the list of
-            applicable validators (validation keywords and callables)
+            A function that, given a schema, returns the list of
+            applicable schema keywords and associated values
             which will be used to validate the instance.
+            This is mostly used to support pre-draft 7 versions of JSON Schema
+            which specified behavior around ignoring keywords if they were
+            siblings of a ``$ref`` keyword. If you're not attempting to
+            implement similar behavior, you can typically ignore this argument
+            and leave it at its default.
 
     Returns:
 
@@ -184,7 +182,12 @@ def create(
     # preemptively don't shadow the `Validator.format_checker` local
     format_checker_arg = format_checker
 
-    @attr.s
+    specification = referencing.jsonschema.specification_with(
+        dialect_id=id_of(meta_schema),
+        default=Specification.OPAQUE,
+    )
+
+    @define
     class Validator:
 
         VALIDATORS = dict(validators)
@@ -193,9 +196,22 @@ def create(
         FORMAT_CHECKER = format_checker_arg
         ID_OF = staticmethod(id_of)
 
-        schema = attr.ib(repr=reprlib.repr)
-        resolver = attr.ib(default=None, repr=False)
-        format_checker = attr.ib(default=None)
+        schema: referencing.jsonschema.Schema = field(repr=reprlib.repr)
+        _ref_resolver = field(default=None, repr=False, alias="resolver")
+        format_checker: _format.FormatChecker | None = field(default=None)
+        # TODO: include new meta-schemas added at runtime
+        _registry: referencing.jsonschema.SchemaRegistry = field(
+            default=SPECIFICATIONS,
+            converter=SPECIFICATIONS.combine,  # type: ignore[misc]
+            kw_only=True,
+            repr=False,
+        )
+        _resolver = field(
+            alias="_resolver",
+            default=None,
+            kw_only=True,
+            repr=False,
+        )
 
         def __init_subclass__(cls):
             warnings.warn(
@@ -212,11 +228,27 @@ def create(
                 stacklevel=2,
             )
 
+            def evolve(self, **changes):
+                cls = self.__class__
+                schema = changes.setdefault("schema", self.schema)
+                NewValidator = validator_for(schema, default=cls)
+
+                for field in fields(cls):  # noqa: F402
+                    if not field.init:
+                        continue
+                    attr_name = field.name
+                    init_name = field.alias
+                    if init_name not in changes:
+                        changes[init_name] = getattr(self, attr_name)
+
+                return NewValidator(**changes)
+
+            cls.evolve = evolve
+
         def __attrs_post_init__(self):
-            if self.resolver is None:
-                self.resolver = RefResolver.from_schema(
-                    self.schema,
-                    id_of=id_of,
+            if self._resolver is None:
+                self._resolver = self._registry.resolver_with_root(
+                    resource=specification.create_resource(self.schema),
                 )
 
         @classmethod
@@ -231,19 +263,32 @@ def create(
             for error in validator.iter_errors(schema):
                 raise exceptions.SchemaError.create_from(error)
 
+        @property
+        def resolver(self):
+            warnings.warn(
+                (
+                    f"Accessing {self.__class__.__name__}.resolver is "
+                    "deprecated as of v4.18.0, in favor of the "
+                    "https://github.com/python-jsonschema/referencing "
+                    "library, which provides more compliant referencing "
+                    "behavior as well as more flexible APIs for "
+                    "customization."
+                ),
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            if self._ref_resolver is None:
+                self._ref_resolver = _RefResolver.from_schema(
+                    self.schema,
+                    id_of=id_of,
+                )
+            return self._ref_resolver
+
         def evolve(self, **changes):
-            # Essentially reproduces attr.evolve, but may involve instantiating
-            # a different class than this one.
-            cls = self.__class__
-
             schema = changes.setdefault("schema", self.schema)
-            NewValidator = validator_for(schema, default=cls)
+            NewValidator = validator_for(schema, default=self.__class__)
 
-            for field in attr.fields(cls):
-                if not field.init:
-                    continue
-                attr_name = field.name  # To deal with private attributes.
-                init_name = attr_name if attr_name[0] != "_" else attr_name[1:]
+            for (attr_name, init_name) in evolve_fields:
                 if init_name not in changes:
                     changes[init_name] = getattr(self, attr_name)
 
@@ -276,39 +321,73 @@ def create(
                 )
                 return
 
-            scope = id_of(_schema)
-            if scope:
-                self.resolver.push_scope(scope)
-            try:
-                for k, v in applicable_validators(_schema):
-                    validator = self.VALIDATORS.get(k)
-                    if validator is None:
-                        continue
+            for k, v in applicable_validators(_schema):
+                validator = self.VALIDATORS.get(k)
+                if validator is None:
+                    continue
 
-                    errors = validator(self, v, instance, _schema) or ()
-                    for error in errors:
-                        # set details if not already set by the called fn
-                        error._set(
-                            validator=k,
-                            validator_value=v,
-                            instance=instance,
-                            schema=_schema,
-                            type_checker=self.TYPE_CHECKER,
-                        )
-                        if k not in {"if", "$ref"}:
-                            error.schema_path.appendleft(k)
-                        yield error
-            finally:
-                if scope:
-                    self.resolver.pop_scope()
+                errors = validator(self, v, instance, _schema) or ()
+                for error in errors:
+                    # set details if not already set by the called fn
+                    error._set(
+                        validator=k,
+                        validator_value=v,
+                        instance=instance,
+                        schema=_schema,
+                        type_checker=self.TYPE_CHECKER,
+                    )
+                    if k not in {"if", "$ref"}:
+                        error.schema_path.appendleft(k)
+                    yield error
 
-        def descend(self, instance, schema, path=None, schema_path=None):
-            for error in self.evolve(schema=schema).iter_errors(instance):
-                if path is not None:
-                    error.path.appendleft(path)
-                if schema_path is not None:
-                    error.schema_path.appendleft(schema_path)
-                yield error
+        def descend(
+            self,
+            instance,
+            schema,
+            path=None,
+            schema_path=None,
+            resolver=None,
+        ):
+            if schema is True:
+                return
+            elif schema is False:
+                yield exceptions.ValidationError(
+                    f"False schema does not allow {instance!r}",
+                    validator=None,
+                    validator_value=None,
+                    instance=instance,
+                    schema=schema,
+                )
+                return
+
+            if resolver is None:
+                resolver = self._resolver.in_subresource(
+                    specification.create_resource(schema),
+                )
+            evolved = self.evolve(schema=schema, _resolver=resolver)
+
+            for k, v in applicable_validators(schema):
+                validator = evolved.VALIDATORS.get(k)
+                if validator is None:
+                    continue
+
+                errors = validator(evolved, v, instance, schema) or ()
+                for error in errors:
+                    # set details if not already set by the called fn
+                    error._set(
+                        validator=k,
+                        validator_value=v,
+                        instance=instance,
+                        schema=schema,
+                        type_checker=evolved.TYPE_CHECKER,
+                    )
+                    if k not in {"if", "$ref"}:
+                        error.schema_path.appendleft(k)
+                    if path is not None:
+                        error.path.appendleft(path)
+                    if schema_path is not None:
+                        error.schema_path.appendleft(schema_path)
+                    yield error
 
         def validate(self, *args, **kwargs):
             for error in self.iter_errors(*args, **kwargs):
@@ -319,6 +398,28 @@ def create(
                 return self.TYPE_CHECKER.is_type(instance, type)
             except exceptions.UndefinedTypeCheck:
                 raise exceptions.UnknownType(type, instance, self.schema)
+
+        def _validate_reference(self, ref, instance):
+            if self._ref_resolver is None:
+                resolved = self._resolver.lookup(ref)
+                return self.descend(
+                    instance,
+                    resolved.contents,
+                    resolver=resolved.resolver,
+                )
+            else:
+                resolve = getattr(self._ref_resolver, "resolve", None)
+                if resolve is None:
+                    with self._ref_resolver.resolving(ref) as resolved:
+                        return self.descend(instance, resolved)
+                else:
+                    scope, resolved = resolve(ref)
+                    self._ref_resolver.push_scope(scope)
+
+                    try:
+                        return self.descend(instance, resolved)
+                    finally:
+                        self._ref_resolver.pop_scope()
 
         def is_valid(self, instance, _schema=None):
             if _schema is not None:
@@ -337,10 +438,16 @@ def create(
             error = next(self.iter_errors(instance), None)
             return error is None
 
+    evolve_fields = [
+        (field.name, field.alias)
+        for field in fields(Validator)
+        if field.init
+    ]
+
     if version is not None:
         safe = version.title().replace(" ", "").replace("-", "")
         Validator.__name__ = Validator.__qualname__ = f"{safe}Validator"
-        Validator = validates(version)(Validator)
+        Validator = validates(version)(Validator)  # type: ignore[misc]
 
     return Validator
 
@@ -411,7 +518,6 @@ def extend(
         likely be made before modifying it, in order to not affect the
         old validator.
     """
-
     all_validators = dict(validator.VALIDATORS)
     all_validators.update(validators)
 
@@ -430,7 +536,9 @@ def extend(
 
 
 Draft3Validator = create(
-    meta_schema=_utils.load_schema("draft3"),
+    meta_schema=SPECIFICATIONS.contents(
+        "http://json-schema.org/draft-03/schema#",
+    ),
     validators={
         "$ref": _validators.ref,
         "additionalItems": _validators.additionalItems,
@@ -457,12 +565,14 @@ Draft3Validator = create(
     type_checker=_types.draft3_type_checker,
     format_checker=_format.draft3_format_checker,
     version="draft3",
-    id_of=_legacy_validators.id_of_ignore_ref(property="id"),
+    id_of=referencing.jsonschema.DRAFT3.id_of,
     applicable_validators=_legacy_validators.ignore_ref_siblings,
 )
 
 Draft4Validator = create(
-    meta_schema=_utils.load_schema("draft4"),
+    meta_schema=SPECIFICATIONS.contents(
+        "http://json-schema.org/draft-04/schema#",
+    ),
     validators={
         "$ref": _validators.ref,
         "additionalItems": _validators.additionalItems,
@@ -494,12 +604,14 @@ Draft4Validator = create(
     type_checker=_types.draft4_type_checker,
     format_checker=_format.draft4_format_checker,
     version="draft4",
-    id_of=_legacy_validators.id_of_ignore_ref(property="id"),
+    id_of=referencing.jsonschema.DRAFT4.id_of,
     applicable_validators=_legacy_validators.ignore_ref_siblings,
 )
 
 Draft6Validator = create(
-    meta_schema=_utils.load_schema("draft6"),
+    meta_schema=SPECIFICATIONS.contents(
+        "http://json-schema.org/draft-06/schema#",
+    ),
     validators={
         "$ref": _validators.ref,
         "additionalItems": _validators.additionalItems,
@@ -536,12 +648,14 @@ Draft6Validator = create(
     type_checker=_types.draft6_type_checker,
     format_checker=_format.draft6_format_checker,
     version="draft6",
-    id_of=_legacy_validators.id_of_ignore_ref(),
+    id_of=referencing.jsonschema.DRAFT6.id_of,
     applicable_validators=_legacy_validators.ignore_ref_siblings,
 )
 
 Draft7Validator = create(
-    meta_schema=_utils.load_schema("draft7"),
+    meta_schema=SPECIFICATIONS.contents(
+        "http://json-schema.org/draft-07/schema#",
+    ),
     validators={
         "$ref": _validators.ref,
         "additionalItems": _validators.additionalItems,
@@ -579,12 +693,14 @@ Draft7Validator = create(
     type_checker=_types.draft7_type_checker,
     format_checker=_format.draft7_format_checker,
     version="draft7",
-    id_of=_legacy_validators.id_of_ignore_ref(),
+    id_of=referencing.jsonschema.DRAFT7.id_of,
     applicable_validators=_legacy_validators.ignore_ref_siblings,
 )
 
 Draft201909Validator = create(
-    meta_schema=_utils.load_schema("draft2019-09"),
+    meta_schema=SPECIFICATIONS.contents(
+        "https://json-schema.org/draft/2019-09/schema",
+    ),
     validators={
         "$recursiveRef": _legacy_validators.recursiveRef,
         "$ref": _validators.ref,
@@ -629,7 +745,9 @@ Draft201909Validator = create(
 )
 
 Draft202012Validator = create(
-    meta_schema=_utils.load_schema("draft2020-12"),
+    meta_schema=SPECIFICATIONS.contents(
+        "https://json-schema.org/draft/2020-12/schema",
+    ),
     validators={
         "$dynamicRef": _validators.dynamicRef,
         "$ref": _validators.ref,
@@ -677,7 +795,7 @@ Draft202012Validator = create(
 _LATEST_VERSION = Draft202012Validator
 
 
-class RefResolver:
+class _RefResolver:
     """
     Resolve JSON References.
 
@@ -719,13 +837,26 @@ class RefResolver:
         cache_remote (bool):
 
             Whether remote refs should be cached after first resolution
+
+    .. deprecated:: v4.18.0
+
+        ``RefResolver`` has been deprecated in favor of `referencing`.
     """
+
+    _DEPRECATION_MESSAGE = (
+        "jsonschema.RefResolver is deprecated as of v4.18.0, in favor of the "
+        "https://github.com/python-jsonschema/referencing library, which "
+        "provides more compliant referencing behavior as well as more "
+        "flexible APIs for customization. A future release will remove "
+        "RefResolver. Please file a feature request (on referencing) if you "
+        "are missing an API for the kind of customization you need."
+    )
 
     def __init__(
         self,
         base_uri,
         referrer,
-        store=m(),
+        store=HashTrieMap(),
         cache_remote=True,
         handlers=(),
         urljoin_cache=None,
@@ -742,7 +873,12 @@ class RefResolver:
 
         self._scopes_stack = [base_uri]
 
-        self.store = _utils.URIDict(_store_schema_list())
+        self.store = _utils.URIDict(
+            (uri, each.contents) for uri, each in SPECIFICATIONS.items()
+        )
+        self.store.update(
+            (id, each.META_SCHEMA) for id, each in _META_SCHEMAS.items()
+        )
         self.store.update(store)
         self.store.update(
             (schema["$id"], schema)
@@ -755,7 +891,13 @@ class RefResolver:
         self._remote_cache = remote_cache
 
     @classmethod
-    def from_schema(cls, schema, id_of=_id_of, *args, **kwargs):
+    def from_schema(  # noqa: D417
+        cls,
+        schema,
+        id_of=referencing.jsonschema.DRAFT202012.id_of,
+        *args,
+        **kwargs,
+    ):
         """
         Construct a resolver from a JSON schema object.
 
@@ -767,10 +909,9 @@ class RefResolver:
 
         Returns:
 
-            `RefResolver`
+            `_RefResolver`
         """
-
-        return cls(base_uri=id_of(schema), referrer=schema, *args, **kwargs)  # noqa: B026, E501
+        return cls(base_uri=id_of(schema) or "", referrer=schema, *args, **kwargs)  # noqa: B026, E501
 
     def push_scope(self, scope):
         """
@@ -796,7 +937,7 @@ class RefResolver:
         try:
             self._scopes_stack.pop()
         except IndexError:
-            raise exceptions.RefResolutionError(
+            raise exceptions._RefResolutionError(
                 "Failed to pop the scope from an empty stack. "
                 "`pop_scope()` should only be called once for every "
                 "`push_scope()`",
@@ -849,7 +990,6 @@ class RefResolver:
 
                 The reference to resolve
         """
-
         url, resolved = self.resolve(ref)
         self.push_scope(url)
         try:
@@ -860,7 +1000,7 @@ class RefResolver:
     def _find_in_referrer(self, key):
         return self._get_subschemas_cache()[key]
 
-    @lru_cache()  # noqa: B019
+    @lru_cache  # noqa: B019
     def _get_subschemas_cache(self):
         cache = {key: [] for key in _SUBSCHEMAS_KEYWORDS}
         for keyword, subschema in _search_schema(
@@ -869,7 +1009,7 @@ class RefResolver:
             cache[keyword].append(subschema)
         return cache
 
-    @lru_cache()  # noqa: B019
+    @lru_cache  # noqa: B019
     def _find_in_subschemas(self, url):
         subschemas = self._get_subschemas_cache()["$id"]
         if not subschemas:
@@ -912,7 +1052,7 @@ class RefResolver:
             try:
                 document = self.resolve_remote(url)
             except Exception as exc:
-                raise exceptions.RefResolutionError(exc)
+                raise exceptions._RefResolutionError(exc)
 
         return self.resolve_fragment(document, fragment)
 
@@ -930,7 +1070,6 @@ class RefResolver:
 
                 a URI fragment to resolve within it
         """
-
         fragment = fragment.lstrip("/")
 
         if not fragment:
@@ -958,15 +1097,14 @@ class RefResolver:
             part = part.replace("~1", "/").replace("~0", "~")
 
             if isinstance(document, Sequence):
-                # Array indexes should be turned into integers
-                try:
+                try:  # noqa: SIM105
                     part = int(part)
                 except ValueError:
                     pass
             try:
                 document = document[part]
             except (TypeError, LookupError):
-                raise exceptions.RefResolutionError(
+                raise exceptions._RefResolutionError(
                     f"Unresolvable JSON pointer: {fragment!r}",
                 )
 
@@ -1053,7 +1191,7 @@ def _search_schema(schema, matcher):
         values.extendleft(value.values())
 
 
-def validate(instance, schema, cls=None, *args, **kwargs):
+def validate(instance, schema, cls=None, *args, **kwargs):  # noqa: D417
     """
     Validate an instance under the given schema.
 
@@ -1180,20 +1318,18 @@ def validator_for(schema, default=_UNSET):
         recommended.
 
     """
-
     DefaultValidator = _LATEST_VERSION if default is _UNSET else default
 
     if schema is True or schema is False or "$schema" not in schema:
         return DefaultValidator
-    if schema["$schema"] not in _META_SCHEMAS:
-        if default is _UNSET:
-            warn(
-                (
-                    "The metaschema specified by $schema was not found. "
-                    "Using the latest draft to validate, but this will raise "
-                    "an error in the future."
-                ),
-                DeprecationWarning,
-                stacklevel=2,
-            )
+    if schema["$schema"] not in _META_SCHEMAS and default is _UNSET:
+        warn(
+            (
+                "The metaschema specified by $schema was not found. "
+                "Using the latest draft to validate, but this will raise "
+                "an error in the future."
+            ),
+            DeprecationWarning,
+            stacklevel=2,
+        )
     return _META_SCHEMAS.get(schema["$schema"], DefaultValidator)

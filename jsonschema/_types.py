@@ -1,26 +1,22 @@
 from __future__ import annotations
 
+from typing import Any, Callable, Mapping
 import numbers
-import typing
 
-from pyrsistent import pmap
-from pyrsistent.typing import PMap
+from rpds import HashTrieMap
 import attr
 
 from jsonschema.exceptions import UndefinedTypeCheck
 
 
-# unfortunately, the type of pmap is generic, and if used as the attr.ib
+# unfortunately, the type of HashTrieMap is generic, and if used as the attr.ib
 # converter, the generic type is presented to mypy, which then fails to match
 # the concrete type of a type checker mapping
 # this "do nothing" wrapper presents the correct information to mypy
-def _typed_pmap_converter(
-    init_val: typing.Mapping[
-        str,
-        typing.Callable[["TypeChecker", typing.Any], bool],
-    ],
-) -> PMap[str, typing.Callable[["TypeChecker", typing.Any], bool]]:
-    return pmap(init_val)
+def _typed_map_converter(
+    init_val: Mapping[str, Callable[[TypeChecker, Any], bool]],
+) -> HashTrieMap[str, Callable[[TypeChecker, Any], bool]]:
+    return HashTrieMap.convert(init_val)
 
 
 def is_array(checker, instance):
@@ -82,11 +78,11 @@ class TypeChecker:
             The initial mapping of types to their checking functions.
     """
 
-    _type_checkers: PMap[
-        str, typing.Callable[["TypeChecker", typing.Any], bool],
+    _type_checkers: HashTrieMap[
+        str, Callable[[TypeChecker, Any], bool],
     ] = attr.ib(
-        default=pmap(),
-        converter=_typed_pmap_converter,
+        default=HashTrieMap(),
+        converter=_typed_map_converter,
     )
 
     def __repr__(self):
@@ -120,7 +116,7 @@ class TypeChecker:
 
         return fn(self, instance)
 
-    def redefine(self, type: str, fn) -> "TypeChecker":
+    def redefine(self, type: str, fn) -> TypeChecker:
         """
         Produce a new checker with the given type redefined.
 
@@ -139,7 +135,7 @@ class TypeChecker:
         """
         return self.redefine_many({type: fn})
 
-    def redefine_many(self, definitions=()) -> "TypeChecker":
+    def redefine_many(self, definitions=()) -> TypeChecker:
         """
         Produce a new checker with the given types redefined.
 
@@ -152,7 +148,7 @@ class TypeChecker:
         type_checkers = self._type_checkers.update(definitions)
         return attr.evolve(self, type_checkers=type_checkers)
 
-    def remove(self, *types) -> "TypeChecker":
+    def remove(self, *types) -> TypeChecker:
         """
         Produce a new checker with the given types forgotten.
 
@@ -168,7 +164,6 @@ class TypeChecker:
 
                 if any given type is unknown to this object
         """
-
         type_checkers = self._type_checkers
         for each in types:
             try:

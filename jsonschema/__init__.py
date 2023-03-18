@@ -1,5 +1,5 @@
 """
-An implementation of JSON Schema for Python
+An implementation of JSON Schema for Python.
 
 The main functionality is provided by the validator classes for each of the
 supported JSON Schema versions.
@@ -12,13 +12,7 @@ import warnings
 
 from jsonschema._format import FormatChecker
 from jsonschema._types import TypeChecker
-from jsonschema.exceptions import (
-    ErrorTree,
-    FormatError,
-    RefResolutionError,
-    SchemaError,
-    ValidationError,
-)
+from jsonschema.exceptions import SchemaError, ValidationError
 from jsonschema.protocols import Validator
 from jsonschema.validators import (
     Draft3Validator,
@@ -27,7 +21,6 @@ from jsonschema.validators import (
     Draft7Validator,
     Draft201909Validator,
     Draft202012Validator,
-    RefResolver,
     validate,
 )
 
@@ -48,6 +41,42 @@ def __getattr__(name):
             import importlib_metadata as metadata
 
         return metadata.version("jsonschema")
+    elif name == "RefResolver":
+        from jsonschema.validators import _RefResolver
+        warnings.warn(
+            _RefResolver._DEPRECATION_MESSAGE,
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return _RefResolver
+    elif name == "ErrorTree":
+        warnings.warn(
+            "Importing ErrorTree directly from the jsonschema package "
+            "is deprecated and will become an ImportError. Import it from "
+            "jsonschema.exceptions instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        from jsonschema.exceptions import ErrorTree
+        return ErrorTree
+    elif name == "FormatError":
+        warnings.warn(
+            "Importing FormatError directly from the jsonschema package "
+            "is deprecated and will become an ImportError. Import it from "
+            "jsonschema.exceptions instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        from jsonschema.exceptions import FormatError
+        return FormatError
+    elif name == "RefResolutionError":
+        from jsonschema.exceptions import _RefResolutionError
+        warnings.warn(
+            _RefResolutionError._DEPRECATION_MESSAGE,
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return _RefResolutionError
 
     format_checkers = {
         "draft3_format_checker": Draft3Validator,
@@ -69,3 +98,19 @@ def __getattr__(name):
         return ValidatorForFormat.FORMAT_CHECKER
 
     raise AttributeError(f"module {__name__} has no attribute {name}")
+
+
+__all__ = [
+    "Draft201909Validator",
+    "Draft202012Validator",
+    "Draft3Validator",
+    "Draft4Validator",
+    "Draft6Validator",
+    "Draft7Validator",
+    "FormatChecker",
+    "SchemaError",
+    "TypeChecker",
+    "ValidationError",
+    "Validator",
+    "validate",
+]
