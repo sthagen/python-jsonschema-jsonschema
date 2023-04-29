@@ -17,8 +17,8 @@ import warnings
 
 from attrs import define, field, fields
 from jsonschema_specifications import REGISTRY as SPECIFICATIONS
-from referencing import Specification
 from rpds import HashTrieMap
+import referencing.exceptions
 import referencing.jsonschema
 
 from jsonschema import (
@@ -100,6 +100,29 @@ def validates(version):
         _META_SCHEMAS[meta_schema_id] = cls
         return cls
     return _validates
+
+
+def _warn_for_remote_retrieve(uri: str):
+    from urllib.request import urlopen
+    with urlopen(uri) as response:
+        warnings.warn(
+            "Automatically retrieving remote references can be a security "
+            "vulnerability and is discouraged by the JSON Schema "
+            "specifications. Relying on this behavior is deprecated "
+            "and will shortly become an error. If you are sure you want to "
+            "remotely retrieve your reference and that it is safe to do so, "
+            "you can find instructions for doing so via referencing.Registry "
+            "in the referencing documentation "
+            "(https://referencing.readthedocs.org).",
+            DeprecationWarning,
+            stacklevel=9,  # Ha ha ha ha magic numbers :/
+        )
+        return referencing.Resource.from_contents(json.load(response))
+
+
+_DEFAULT_REGISTRY = SPECIFICATIONS.combine(
+    referencing.Registry(retrieve=_warn_for_remote_retrieve),
+)
 
 
 def create(
@@ -184,7 +207,7 @@ def create(
 
     specification = referencing.jsonschema.specification_with(
         dialect_id=id_of(meta_schema) or "urn:unknown-dialect",
-        default=Specification.OPAQUE,
+        default=referencing.Specification.OPAQUE,
     )
 
     @define
@@ -201,8 +224,12 @@ def create(
         format_checker: _format.FormatChecker | None = field(default=None)
         # TODO: include new meta-schemas added at runtime
         _registry: referencing.jsonschema.SchemaRegistry = field(
-            default=SPECIFICATIONS,
-            converter=SPECIFICATIONS.combine,  # type: ignore[misc]
+            default=_DEFAULT_REGISTRY,
+            converter=lambda value: (
+                _DEFAULT_REGISTRY
+                if value is _DEFAULT_REGISTRY
+                else SPECIFICATIONS.combine(value)
+            ),
             kw_only=True,
             repr=False,
         )
@@ -360,11 +387,14 @@ def create(
                 )
                 return
 
-            if resolver is None:
-                resolver = self._resolver.in_subresource(
-                    specification.create_resource(schema),
-                )
-            evolved = self.evolve(schema=schema, _resolver=resolver)
+            if self._ref_resolver is not None:
+                evolved = self.evolve(schema=schema)
+            else:
+                if resolver is None:
+                    resolver = self._resolver.in_subresource(
+                        specification.create_resource(schema),
+                    )
+                evolved = self.evolve(schema=schema, _resolver=resolver)
 
             for k, v in applicable_validators(schema):
                 validator = evolved.VALIDATORS.get(k)
@@ -401,7 +431,11 @@ def create(
 
         def _validate_reference(self, ref, instance):
             if self._ref_resolver is None:
-                resolved = self._resolver.lookup(ref)
+                try:
+                    resolved = self._resolver.lookup(ref)
+                except referencing.exceptions.Unresolvable as err:
+                    raise exceptions._WrappedReferencingError(err)
+
                 return self.descend(
                     instance,
                     resolved.contents,
@@ -417,7 +451,7 @@ def create(
                     self._ref_resolver.push_scope(scope)
 
                     try:
-                        return self.descend(instance, resolved)
+                        return list(self.descend(instance, resolved))
                     finally:
                         self._ref_resolver.pop_scope()
 
@@ -1016,9 +1050,10 @@ class _RefResolver:
             return None
         uri, fragment = urldefrag(url)
         for subschema in subschemas:
-            target_uri = self._urljoin_cache(
-                self.resolution_scope, subschema["$id"],
-            )
+            id = subschema["$id"]
+            if not isinstance(id, str):
+                continue
+            target_uri = self._urljoin_cache(self.resolution_scope, id)
             if target_uri.rstrip("/") == uri.rstrip("/"):
                 if fragment:
                     subschema = self.resolve_fragment(subschema, fragment)
