@@ -25,6 +25,7 @@ NONGPL_LICENSES = [
     "MIT License",
     "Mozilla Public License 2.0 (MPL 2.0)",
     "Python Software Foundation License",
+    "The Unlicense (Unlicense)",
 ]
 
 
@@ -115,7 +116,7 @@ def readme(session):
     session.install("build", "docutils", "twine")
     tmpdir = session.create_tmp()
     session.run("python", "-m", "build", ROOT, "--outdir", tmpdir)
-    session.run("python", "-m", "twine", "check", tmpdir + "/*")
+    session.run("python", "-m", "twine", "check", "--strict", tmpdir + "/*")
     session.run("rst2html5.py", "--halt=warning", CHANGELOG, "/dev/null")
 
 
