@@ -1,3 +1,19 @@
+v4.18.3
+=======
+
+* Properly preserve ``applicable_validators`` in extended validators.
+  Specifically, validators extending early drafts where siblings of ``$ref`` were ignored will properly ignore siblings in the extended validator.
+
+v4.18.2
+=======
+
+* Fix an additional regression with the deprecated ``jsonschema.RefResolver`` and pointer resolution.
+
+v4.18.1
+=======
+
+* Fix a regression with ``jsonschema.RefResolver`` based resolution when used in combination with a custom validation dialect (via ``jsonschema.validators.create``).
+
 v4.18.0
 =======
 

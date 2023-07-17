@@ -219,6 +219,8 @@ def create(
         FORMAT_CHECKER = format_checker_arg
         ID_OF = staticmethod(id_of)
 
+        _APPLICABLE_VALIDATORS = applicable_validators
+
         schema: referencing.jsonschema.Schema = field(repr=reprlib.repr)
         _ref_resolver = field(default=None, repr=False, alias="resolver")
         format_checker: _format.FormatChecker | None = field(default=None)
@@ -274,6 +276,13 @@ def create(
                     registry = SPECIFICATIONS.combine(registry)
                 resource = specification.create_resource(self.schema)
                 self._resolver = registry.resolver_with_root(resource)
+
+            # REMOVEME: Legacy ref resolution state management.
+            push_scope = getattr(self._ref_resolver, "push_scope", None)
+            if push_scope is not None:
+                id = id_of(self.schema)
+                if id is not None:
+                    push_scope(id)
 
         @classmethod
         def check_schema(cls, schema, format_checker=_UNSET):
@@ -563,6 +572,7 @@ def extend(
         type_checker=type_checker,
         format_checker=format_checker,
         id_of=validator.ID_OF,
+        applicable_validators=validator._APPLICABLE_VALIDATORS,
     )
 
 

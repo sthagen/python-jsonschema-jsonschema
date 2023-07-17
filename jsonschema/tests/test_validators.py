@@ -285,6 +285,23 @@ class TestCreateAndExtend(TestCase):
         Derived = validators.extend(Original)
         self.assertEqual(Derived.ID_OF(Derived.META_SCHEMA), correct_id)
 
+    def test_extend_applicable_validators(self):
+        """
+        Extending a validator preserves its notion of applicable validators.
+        """
+
+        schema = {
+            "$defs": {"test": {"type": "number"}},
+            "$ref": "#/$defs/test",
+            "maximum": 1
+        }
+
+        draft4 = validators.Draft4Validator(schema)
+        self.assertTrue(draft4.is_valid(37))  # as $ref ignores siblings
+
+        Derived = validators.extend(validators.Draft4Validator)
+        self.assertTrue(Derived(schema).is_valid(37))
+
 
 class TestValidationErrorMessages(TestCase):
     def message_for(self, instance, schema, *args, **kwargs):
@@ -2372,6 +2389,47 @@ class TestRefResolver(TestCase):
         two = validators._RefResolver("", another)
         validator = validators.Draft7Validator(another, resolver=two)
         self.assertFalse(validator.is_valid({"maxLength": "foo"}))
+
+    def test_newly_created_validator_with_ref_resolver(self):
+        """
+        See https://github.com/python-jsonschema/jsonschema/issues/1061#issuecomment-1624266555.
+        """  # noqa: E501
+
+        def handle(uri):
+            self.assertEqual(uri, "http://example.com/foo")
+            return {"type": "integer"}
+
+        resolver = validators._RefResolver("", {}, handlers={"http": handle})
+        Validator = validators.create(
+            meta_schema={},
+            validators=validators.Draft4Validator.VALIDATORS,
+        )
+        schema = {"$id": "http://example.com/bar", "$ref": "foo"}
+        validator = Validator(schema, resolver=resolver)
+        self.assertEqual(
+            (validator.is_valid({}), validator.is_valid(37)),
+            (False, True),
+        )
+
+    def test_refresolver_with_pointer_in_schema_with_no_id(self):
+        """
+        See https://github.com/python-jsonschema/jsonschema/issues/1124#issuecomment-1632574249.
+        """  # noqa: E501
+
+        schema = {
+            "properties": {"x": {"$ref": "#/definitions/x"}},
+            "definitions": {"x": {"type": "integer"}},
+        }
+
+        validator = validators.Draft202012Validator(
+            schema,
+            resolver=validators._RefResolver("", schema),
+        )
+        self.assertEqual(
+            (validator.is_valid({"x": "y"}), validator.is_valid({"x": 37})),
+            (False, True),
+        )
+
 
 
 def sorted_errors(errors):
