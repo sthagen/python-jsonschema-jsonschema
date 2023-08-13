@@ -42,7 +42,7 @@ def session(default=True, **kwargs):
     return _session
 
 
-@session(python=["3.8", "3.9", "3.10", "3.11", "pypy3"])
+@session(python=["3.8", "3.9", "3.10", "3.11", "3.12", "pypy3"])
 @nox.parametrize("installable", INSTALLABLE)
 def tests(session, installable):
 
@@ -155,6 +155,7 @@ def docs(session, builder):
         argv = ["-n", "-T", "-W"]
         if builder != "spelling":
             argv += ["-q"]
+        posargs = session.posargs or [tmpdir / builder]
         session.run(
             "python",
             "-m",
@@ -162,8 +163,8 @@ def docs(session, builder):
             "-b",
             builder,
             DOCS,
-            tmpdir / builder,
             *argv,
+            *posargs,
         )
 
 
@@ -201,7 +202,7 @@ def perf(session, benchmark):
 @session(default=False)
 def requirements(session):
     session.install("pip-tools")
-    for each in [DOCS / "requirements.in", ROOT / "test-requirements.in"]:
+    for each in [DOCS / "requirements.in"]:
         session.run(
             "pip-compile",
             "--resolver",

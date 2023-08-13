@@ -1,3 +1,22 @@
+v4.19.0
+=======
+
+* Importing the ``Validator`` protocol directly from the package root is deprecated.
+  Import it from ``jsonschema.protocols.Validator`` instead.
+* Automatic retrieval of remote references (which is still deprecated) now properly succeeds even if the retrieved resource does not declare which version of JSON Schema it uses.
+  Such resources are assumed to be 2020-12 schemas.
+  This more closely matches the pre-referencing library behavior.
+
+v4.18.6
+=======
+
+* Set a ``jsonschema`` specific user agent when automatically retrieving remote references (which is deprecated).
+
+v4.18.5
+=======
+
+* Declare support for Py3.12
+
 v4.18.4
 =======
 
