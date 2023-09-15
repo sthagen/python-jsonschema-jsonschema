@@ -33,7 +33,7 @@ NONGPL_LICENSES = [
 nox.options.sessions = []
 
 
-def session(default=True, **kwargs):
+def session(default=True, **kwargs):  # noqa: D103
     def _session(fn):
         if default:
             nox.options.sessions.append(kwargs.get("name", fn.__name__))
@@ -45,7 +45,9 @@ def session(default=True, **kwargs):
 @session(python=["3.8", "3.9", "3.10", "3.11", "3.12", "pypy3"])
 @nox.parametrize("installable", INSTALLABLE)
 def tests(session, installable):
-
+    """
+    Run the test suite with a corresponding Python version.
+    """
     env = dict(JSON_SCHEMA_TEST_SUITE=str(ROOT / "json"))
 
     session.install("virtue", installable)
@@ -87,26 +89,37 @@ def tests(session, installable):
 @session()
 @nox.parametrize("installable", INSTALLABLE)
 def audit(session, installable):
+    """
+    Audit dependencies for vulnerabilities.
+    """
     session.install("pip-audit", installable)
     session.run("python", "-m", "pip_audit")
 
-    if "format-nongpl" in installable:
-        session.install("pip-licenses")
-        session.run(
-            "python",
-            "-m",
-            "piplicenses",
-            "--ignore-packages",
-            "pip-requirements-parser",
-            "pip_audit",
-            "pip-api",
-            "--allow-only",
-            ";".join(NONGPL_LICENSES),
-        )
+
+@session()
+def license_check(session):
+    """
+    Check that the non-GPL extra does not allow arbitrary licenses.
+    """
+    session.install("pip-licenses", f"{ROOT}[format-nongpl]")
+    session.run(
+        "python",
+        "-m",
+        "piplicenses",
+        "--ignore-packages",
+        "pip-requirements-parser",
+        "pip_audit",
+        "pip-api",
+        "--allow-only",
+        ";".join(NONGPL_LICENSES),
+    )
 
 
 @session(tags=["build"])
 def build(session):
+    """
+    Build a distribution suitable for PyPI and check its validity.
+    """
     session.install("build", "docutils", "twine")
     with TemporaryDirectory() as tmpdir:
         session.run("python", "-m", "build", ROOT, "--outdir", tmpdir)
@@ -118,18 +131,27 @@ def build(session):
 
 @session()
 def secrets(session):
+    """
+    Check for accidentally committed secrets.
+    """
     session.install("detect-secrets")
     session.run("detect-secrets", "scan", ROOT)
 
 
 @session(tags=["style"])
 def style(session):
+    """
+    Check Python code style.
+    """
     session.install("ruff")
     session.run("ruff", "check", ROOT)
 
 
 @session()
 def typing(session):
+    """
+    Check static typing.
+    """
     session.install("mypy", "types-requests", ROOT)
     session.run("mypy", "--config", PYPROJECT, PACKAGE)
 
@@ -149,6 +171,9 @@ def typing(session):
     ],
 )
 def docs(session, builder):
+    """
+    Build the documentation using a specific Sphinx builder.
+    """
     session.install("-r", DOCS / "requirements.txt")
     with TemporaryDirectory() as tmpdir_str:
         tmpdir = Path(tmpdir_str)
@@ -170,18 +195,15 @@ def docs(session, builder):
 
 @session(tags=["docs", "style"], name="docs(style)")
 def docs_style(session):
+    """
+    Check the documentation style.
+    """
     session.install(
         "doc8",
         "pygments",
         "pygments-github-lexers",
     )
     session.run("python", "-m", "doc8", "--config", PYPROJECT, DOCS)
-
-
-@session(default=False)
-def bandit(session):
-    session.install("bandit")
-    session.run("bandit", "--recursive", PACKAGE)
 
 
 @session(default=False)
@@ -193,6 +215,9 @@ def bandit(session):
     ],
 )
 def perf(session, benchmark):
+    """
+    Run a performance benchmark.
+    """
     session.install("pyperf", f"{ROOT}[format]")
     tmpdir = Path(session.create_tmp())
     output = tmpdir / f"bench-{benchmark}.json"
@@ -201,6 +226,11 @@ def perf(session, benchmark):
 
 @session(default=False)
 def requirements(session):
+    """
+    Update the project's pinned requirements.
+
+    You should commit the result afterwards.
+    """
     session.install("pip-tools")
     for each in [DOCS / "requirements.in"]:
         session.run(
