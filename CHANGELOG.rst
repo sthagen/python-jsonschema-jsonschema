@@ -1,3 +1,15 @@
+v4.20.0
+=======
+
+* ``jsonschema.exceptions.ErrorTree.__setitem__`` is now deprecated.
+  More broadly, in general users of ``jsonschema`` should never be mutating objects owned by the library.
+
+v4.19.2
+=======
+
+* Fix the error message for additional items when used with heterogeneous arrays.
+* Don't leak the ``additionalItems`` keyword into JSON Schema draft 2020-12, where it was replaced by ``items``.
+
 v4.19.1
 =======
 

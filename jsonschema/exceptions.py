@@ -209,14 +209,14 @@ class _RefResolutionError(Exception):
 
     def __eq__(self, other):
         if self.__class__ is not other.__class__:
-            return NotImplemented
+            return NotImplemented  # pragma: no cover -- uncovered but deprecated  # noqa: E501
         return self._cause == other._cause
 
     def __str__(self):
         return str(self._cause)
 
 
-class _WrappedReferencingError(_RefResolutionError, _Unresolvable):
+class _WrappedReferencingError(_RefResolutionError, _Unresolvable):  # pragma: no cover -- partially uncovered but to be removed  # noqa: E501
     def __init__(self, cause: _Unresolvable):
         object.__setattr__(self, "_wrapped", cause)
 
@@ -331,7 +331,18 @@ class ErrorTree:
     def __setitem__(self, index, value):
         """
         Add an error to the tree at the given ``index``.
+
+        .. deprecated:: v4.20.0
+
+            Setting items on an `ErrorTree` is deprecated without replacement.
+            To populate a tree, provide all of its sub-errors when you
+            construct the tree.
         """
+        warnings.warn(
+            "ErrorTree.__setitem__ is deprecated without replacement.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
         self._contents[index] = value
 
     def __iter__(self):

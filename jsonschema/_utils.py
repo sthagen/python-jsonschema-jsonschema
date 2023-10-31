@@ -28,10 +28,10 @@ class URIDict(MutableMapping):
     def __iter__(self):
         return iter(self.store)
 
-    def __len__(self):
+    def __len__(self):  # pragma: no cover -- untested, but to be removed
         return len(self.store)
 
-    def __repr__(self):
+    def __repr__(self):  # pragma: no cover -- untested, but to be removed
         return repr(self.store)
 
 
@@ -91,7 +91,7 @@ def extras_msg(extras):
     """
 
     verb = "was" if len(extras) == 1 else "were"
-    return ", ".join(repr(extra) for extra in sorted(extras)), verb
+    return ", ".join(repr(extra) for extra in extras), verb
 
 
 def ensure_list(thing):
