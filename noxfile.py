@@ -36,7 +36,7 @@ NONGPL_LICENSES = [
 ]
 
 SUPPORTED = ["3.9", "3.10", "pypy3.10", "3.11", "3.12", "3.13"]
-LATEST_STABLE = "3.12"
+LATEST_STABLE = SUPPORTED[-1]
 
 nox.options.sessions = []
 
@@ -115,9 +115,17 @@ def license_check(session):
         "-m",
         "piplicenses",
         "--ignore-packages",
+
+        # because they're not our deps
         "pip-requirements-parser",
         "pip_audit",
         "pip-api",
+
+        # because pip-licenses doesn't yet support PEP 639 :/
+        "attrs",
+        "jsonschema",
+        "referencing",
+
         "--allow-only",
         ";".join(NONGPL_LICENSES),
     )
