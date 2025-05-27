@@ -36,7 +36,7 @@ NONGPL_LICENSES = [
     "The Unlicense (Unlicense)",
 ]
 
-SUPPORTED = ["3.9", "3.10", "pypy3.10", "3.11", "3.12", "3.13"]
+SUPPORTED = ["3.9", "3.10", "pypy3.11", "3.11", "3.12", "3.13"]
 LATEST_STABLE = SUPPORTED[-1]
 
 nox.options.default_venv_backend = "uv|virtualenv"
@@ -128,6 +128,7 @@ def license_check(session):
         "jsonschema",
         "jsonschema-specifications",
         "referencing",
+        "types-python-dateutil",
 
         "--allow-only",
         ";".join(NONGPL_LICENSES),
