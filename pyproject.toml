@@ -78,6 +78,9 @@ Tidelift = "https://tidelift.com/subscription/pkg/pypi-jsonschema?utm_source=pyp
 Changelog = "https://github.com/python-jsonschema/jsonschema/blob/main/CHANGELOG.rst"
 Source = "https://github.com/python-jsonschema/jsonschema"
 
+[dependency-groups]
+test = ["virtue", "jsonpath-ng"]
+
 [tool.hatch.metadata.hooks.fancy-pypi-readme]
 content-type = "text/x-rst"
 
@@ -164,7 +167,7 @@ ignore = [
   "D406",    # Section headers should end with a colon not a newline
   "D407",    # Underlines aren't needed
   "D412",    # Plz spaces after section headers
-  "EM101",   # These don't bother me.
+  "EM101",   # These don't bother me, it's fine there's some duplication.
   "EM102",
   "FBT",     # It's worth avoiding boolean args but I don't care to enforce it
   "FIX",     # Yes thanks, if I could it wouldn't be there
