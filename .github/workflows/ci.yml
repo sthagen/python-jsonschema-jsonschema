@@ -24,7 +24,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Set up uv
-        uses: astral-sh/setup-uv@4959332f0f014c5280e7eac8b70c90cb574c9f9b
+        uses: astral-sh/setup-uv@557e51de59eb14aaaba2ed9621916900a91d50c6
         with:
           enable-cache: ${{ github.ref_type != 'tag' }} # zizmor: ignore[cache-poisoning]
       - id: noxenvs-matrix
@@ -85,7 +85,7 @@ jobs:
         run: brew install enchant
         if: runner.os == 'macOS' && startsWith(matrix.noxenv, 'docs')
       - name: Set up Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: |
             3.9
@@ -100,7 +100,7 @@ jobs:
         if: runner.os == 'Windows' && startsWith(matrix.noxenv, 'tests')
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@4959332f0f014c5280e7eac8b70c90cb574c9f9b
+        uses: astral-sh/setup-uv@557e51de59eb14aaaba2ed9621916900a91d50c6
         with:
           enable-cache: true
 
@@ -124,7 +124,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Set up uv
-        uses: astral-sh/setup-uv@4959332f0f014c5280e7eac8b70c90cb574c9f9b
+        uses: astral-sh/setup-uv@557e51de59eb14aaaba2ed9621916900a91d50c6
         with:
           enable-cache: true
 
@@ -133,10 +133,10 @@ jobs:
 
       - name: Publish to PyPI
         if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags')
-        uses: pypa/gh-action-pypi-publish@76f52bc884231f62b9a034ebfe128415bbaabdfc
+        uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e
       - name: Create a GitHub Release
         if: github.event_name == 'push' && startsWith(github.event.ref, 'refs/tags')
-        uses: softprops/action-gh-release@72f2c25fcb47643c292f7107632f7a47c1df5cd8
+        uses: softprops/action-gh-release@6cbd405e2c4e67a21c47fa9e383d020e4e28b836
         with:
           files: |
             dist/*
