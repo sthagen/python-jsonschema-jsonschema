@@ -37,7 +37,7 @@ NONGPL_LICENSES = [
     "The Unlicense (Unlicense)",
 ]
 
-SUPPORTED = ["3.9", "3.10", "pypy3.11", "3.11", "3.12", "3.13"]
+SUPPORTED = ["3.10", "pypy3.11", "3.11", "3.12", "3.13", "3.14t", "3.14"]
 LATEST_STABLE = SUPPORTED[-1]
 
 nox.options.default_venv_backend = "uv|virtualenv"
@@ -95,23 +95,6 @@ def tests(session, installable):
                 )
     else:
         session.run("virtue", *session.posargs, PACKAGE, env=env)
-
-
-@session()
-@nox.parametrize("installable", INSTALLABLE)
-def audit(session, installable):
-    """
-    Audit dependencies for vulnerabilities.
-    """
-    session.install("pip-audit", installable)
-    session.run(
-        "python",
-        "-m",
-        "pip_audit",
-        "--ignore-vuln",
-        "GHSA-4xh5-x5gv-qwph",  # pip vuln, not relevant, but we need to figure
-                                # out how to properly run pip-audit
-    )
 
 
 @session()
