@@ -24,7 +24,7 @@ jobs:
         with:
           persist-credentials: false
       - name: Set up uv
-        uses: astral-sh/setup-uv@3259c6206f993105e3a61b142c2d97bf4b9ef83d
+        uses: astral-sh/setup-uv@2ddd2b9cb38ad8efd50337e8ab201519a34c9f24
         with:
           enable-cache: ${{ github.ref_type != 'tag' }} # zizmor: ignore[cache-poisoning]
       - id: noxenvs-matrix
@@ -73,6 +73,18 @@ jobs:
             noxenv: "docs(spelling)"
           - os: windows-latest
             noxenv: "docs(style)"
+          - os: windows-latest
+            noxenv: "tests-3.14(no-extras)"
+          - os: windows-latest
+            noxenv: "tests-3.14(format)"
+          - os: windows-latest
+            noxenv: "tests-3.14(format-nongpl)"
+          - os: windows-latest
+            noxenv: "tests-3.14t(no-extras)"
+          - os: windows-latest
+            noxenv: "tests-3.14t(format)"
+          - os: windows-latest
+            noxenv: "tests-3.14t(format-nongpl)"
 
     steps:
       - uses: actions/checkout@v5
@@ -101,9 +113,9 @@ jobs:
         if: runner.os == 'Windows' && startsWith(matrix.noxenv, 'tests')
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@3259c6206f993105e3a61b142c2d97bf4b9ef83d
+        uses: astral-sh/setup-uv@2ddd2b9cb38ad8efd50337e8ab201519a34c9f24
         with:
-          enable-cache: true
+          enable-cache: ${{ github.ref_type != 'tag' }} # zizmor: ignore[cache-poisoning]
 
       - name: Run nox
         run: uvx nox -s "${{ matrix.noxenv }}" -- ${{ matrix.posargs }} # zizmor: ignore[template-injection]
@@ -125,9 +137,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
       - name: Set up uv
-        uses: astral-sh/setup-uv@3259c6206f993105e3a61b142c2d97bf4b9ef83d
+        uses: astral-sh/setup-uv@2ddd2b9cb38ad8efd50337e8ab201519a34c9f24
         with:
-          enable-cache: true
+          enable-cache: ${{ github.ref_type != 'tag' }} # zizmor: ignore[cache-poisoning]
 
       - name: Build our distributions
         run: uv run --frozen --with 'build[uv]' -m build --installer=uv
