@@ -410,6 +410,8 @@ def create(
                     validator_value=None,
                     instance=instance,
                     schema=schema,
+                    path=() if path is None else (path,),
+                    schema_path=() if schema_path is None else (schema_path,),
                 )
                 return
 

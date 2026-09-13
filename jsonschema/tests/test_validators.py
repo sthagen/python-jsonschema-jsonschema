@@ -1316,6 +1316,34 @@ class TestValidationErrorDetails(TestCase):
             ),
         )
 
+    def test_nested_boolean_schema_False(self):
+        schema = {"properties": {"foo": False}}
+        validator = validators.Draft7Validator(schema)
+        error, = validator.iter_errors({"foo": 12})
+
+        self.assertEqual(
+            (
+                error.message,
+                error.validator,
+                error.validator_value,
+                error.instance,
+                error.schema,
+                error.path,
+                error.schema_path,
+                error.json_path,
+            ),
+            (
+                "False schema does not allow 12",
+                None,
+                None,
+                12,
+                False,
+                deque(["foo"]),
+                deque(["properties", "foo"]),
+                "$.foo",
+            ),
+        )
+
     def test_ref(self):
         ref, schema = "someRef", {"additionalProperties": {"type": "integer"}}
         validator = validators.Draft7Validator(

@@ -6,8 +6,7 @@ from __future__ import annotations
 from collections import defaultdict, deque
 from pprint import pformat
 from textwrap import dedent, indent
-from typing import TYPE_CHECKING, Any, ClassVar
-import heapq
+from typing import TYPE_CHECKING, Any, ClassVar, TypeVar
 import re
 import warnings
 
@@ -17,7 +16,13 @@ from referencing.exceptions import Unresolvable as _Unresolvable
 from jsonschema import _utils
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping, MutableMapping, Sequence
+    from collections.abc import (
+        Callable,
+        Iterable,
+        Mapping,
+        MutableMapping,
+        Sequence,
+    )
 
     from jsonschema import _types
 
@@ -197,6 +202,9 @@ class _Error(Exception):
         )
 
 
+_E = TypeVar("_E", bound=_Error)
+
+
 class ValidationError(_Error):
     """
     An instance was invalid under a provided schema.
@@ -315,18 +323,37 @@ class FormatError(Exception):
 class ErrorTree:
     """
     ErrorTrees make it easier to check which validations failed.
+
+    Arguments:
+
+        errors:
+
+            the errors to populate the tree with
+
+        instance:
+
+            the instance the tree corresponds to, if known, which
+            enables indexing the tree at indices not present in it to
+            raise the same error that indexing the instance itself would
+
     """
 
-    _instance = _unset
-
-    def __init__(self, errors: Iterable[ValidationError] = ()):
+    def __init__(
+        self,
+        errors: Iterable[ValidationError] = (),
+        *,
+        instance: Any = _unset,
+    ):
         self.errors: MutableMapping[str, ValidationError] = {}
-        self._contents: Mapping[str, ErrorTree] = defaultdict(self.__class__)
+        self._contents: MutableMapping[str | int, ErrorTree] = {}
+        self._instance = instance
 
         for error in errors:
             container = self
             for element in error.path:
-                container = container[element]
+                container = container._contents.setdefault(
+                    element, self.__class__(),
+                )
             container.errors[error.validator] = error
 
             container._instance = error.instance
@@ -346,9 +373,11 @@ class ErrorTree:
         by ``instance.__getitem__`` will be propagated (usually this is
         some subclass of `LookupError`.
         """
-        if self._instance is not _unset and index not in self:
-            self._instance[index]
-        return self._contents[index]
+        if index in self:
+            return self._contents[index]
+        if self._instance is _unset:
+            return self.__class__()
+        return self.__class__(instance=self._instance[index])
 
     def __setitem__(self, index: str | int, value: ErrorTree):
         """
@@ -365,7 +394,7 @@ class ErrorTree:
             DeprecationWarning,
             stacklevel=2,
         )
-        self._contents[index] = value  # type: ignore[index]
+        self._contents[index] = value
 
     def __iter__(self):
         """
@@ -416,7 +445,6 @@ def by_relevance(weak=WEAK_MATCHES, strong=STRONG_MATCHES):
         validator = error.validator
         return (                        # prefer errors which are ...
             -len(error.path),           # shorter path thereby more general
-            error.path,                 # earlier (for sibling errors)
             validator not in weak,      # for a non-low-priority keyword
             validator in strong,        # for a high priority keyword
             not error._matches_type(),  # at least match the instance's type
@@ -446,9 +474,11 @@ def best_match(errors, key=relevance):
     since they indicate "more" is wrong with the instance.
 
     If the resulting match is either :kw:`oneOf` or :kw:`anyOf`, the
-    *opposite* assumption is made -- i.e. the deepest error is picked,
-    since these keywords only need to match once, and any other errors
-    may not be relevant.
+    *opposite* assumption is made -- i.e. the deepest error is picked
+    among the most relevant errors in each separate subschema (preferring
+    subschemas which produced fewer errors when tied), since these
+    keywords only need to match once, and any other errors may not be
+    relevant.
 
     Arguments:
         errors (collections.abc.Iterable):
@@ -476,15 +506,57 @@ def best_match(errors, key=relevance):
         set of inputs from version to version if better heuristics are added.
 
     """
-    best = max(errors, key=key, default=None)
+    _, best = _most_relevant(errors, key=key)
     if best is None:
         return
 
     while best.context:
-        # Calculate the minimum via nsmallest, because we don't recurse if
-        # all nested errors have the same relevance (i.e. if min == max == all)
-        smallest = heapq.nsmallest(2, best.context, key=key)
-        if len(smallest) == 2 and key(smallest[0]) == key(smallest[1]):  # noqa: PLR2004
-            return best
-        best = smallest[0]
+        # Group the errors by the subschema which produced them.
+        by_subschema: dict[Any, list[_Error]] = defaultdict(list)
+        for error in best.context:
+            index = error.schema_path[0] if error.schema_path else None
+            by_subschema[index].append(error)
+
+        # Rank each subschema by how deep its most relevant error is,
+        # and amongst those equally deep, by how few errors it produced
+        # (i.e. how close it was to being valid). Lower ranks are better.
+        best_rank, best_in_subschema, tied = None, None, False
+        for errors_in_subschema in by_subschema.values():
+            error_key, error = _most_relevant(errors_in_subschema, key=key)
+            rank = error_key, len(errors_in_subschema)
+            if best_rank is None or rank < best_rank:
+                best_rank, best_in_subschema, tied = rank, error, False
+            elif rank == best_rank:
+                tied = True
+
+        # If multiple subschemas rank equally we can't tell which was
+        # intended, so we stop here rather than descend into one of them.
+        if tied:
+            break
+        best = best_in_subschema
     return best
+
+
+def _most_relevant(
+    errors: Iterable[_E],
+    key: Callable[[_E], Any],
+) -> tuple[Any, _E | None]:
+    """
+    Find the most relevant error along with its key, computing each key once.
+
+    Equally relevant errors are settled by picking the one which appears
+    earlier in the instance, which makes the choice independent of the
+    order in which the errors happened to be produced.
+
+    Returns ``(None, None)`` if there were no errors.
+    """
+    best_key, best = None, None
+    for error in errors:
+        error_key = key(error)
+        if (
+            best is None
+            or error_key > best_key
+            or (error_key == best_key and error.path < best.path)
+        ):
+            best_key, best = error_key, error
+    return best_key, best
