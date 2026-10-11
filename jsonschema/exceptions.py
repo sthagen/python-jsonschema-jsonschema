@@ -1,12 +1,13 @@
 """
 Validation errors, and some surrounding helpers.
 """
+
 from __future__ import annotations
 
 from collections import defaultdict, deque
 from pprint import pformat
 from textwrap import dedent, indent
-from typing import TYPE_CHECKING, Any, ClassVar, TypeVar
+from typing import TYPE_CHECKING, Any, ClassVar
 import re
 import warnings
 
@@ -53,7 +54,6 @@ def __getattr__(name):
 
 
 class _Error(Exception):
-
     _word_for_schema_in_error_message: ClassVar[str]
     _word_for_instance_in_error_message: ClassVar[str]
 
@@ -103,7 +103,10 @@ class _Error(Exception):
 
     def __str__(self) -> str:
         essential_for_verbose = (
-            self.validator, self.validator_value, self.instance, self.schema,
+            self.validator,
+            self.validator_value,
+            self.instance,
+            self.schema,
         )
         if any(m is _unset for m in essential_for_verbose):
             return self.message
@@ -181,8 +184,16 @@ class _Error(Exception):
 
     def _contents(self):
         attrs = (
-            "message", "cause", "context", "validator", "validator_value",
-            "path", "schema_path", "instance", "schema", "parent",
+            "message",
+            "cause",
+            "context",
+            "validator",
+            "validator_value",
+            "path",
+            "schema_path",
+            "instance",
+            "schema",
+            "parent",
         )
         return {attr: getattr(self, attr) for attr in attrs}
 
@@ -200,9 +211,6 @@ class _Error(Exception):
             self._type_checker.is_type(self.instance, expected_type)
             for expected_type in expected
         )
-
-
-_E = TypeVar("_E", bound=_Error)
 
 
 class ValidationError(_Error):
@@ -246,7 +254,10 @@ class _RefResolutionError(Exception):  # noqa: PLW1641
         return str(self._cause)
 
 
-class _WrappedReferencingError(_RefResolutionError, _Unresolvable):  # pragma: no cover -- partially uncovered but to be removed  # noqa: E501
+class _WrappedReferencingError(
+    _RefResolutionError,
+    _Unresolvable,
+):  # pragma: no cover -- partially uncovered but to be removed
     def __init__(self, cause: _Unresolvable):
         object.__setattr__(self, "_wrapped", cause)
 
@@ -352,7 +363,8 @@ class ErrorTree:
             container = self
             for element in error.path:
                 container = container._contents.setdefault(
-                    element, self.__class__(),
+                    element,
+                    self.__class__(),
                 )
             container.errors[error.validator] = error
 
@@ -443,12 +455,12 @@ def by_relevance(weak=WEAK_MATCHES, strong=STRONG_MATCHES):
 
     def relevance(error):
         validator = error.validator
-        return (                        # prefer errors which are ...
-            -len(error.path),           # shorter path thereby more general
-            validator not in weak,      # for a non-low-priority keyword
-            validator in strong,        # for a high priority keyword
+        return (  # prefer errors which are ...
+            -len(error.path),  # shorter path thereby more general
+            validator not in weak,  # for a non-low-priority keyword
+            validator in strong,  # for a high priority keyword
             not error._matches_type(),  # at least match the instance's type
-        )                               # otherwise we'll treat them the same
+        )  # otherwise we'll treat them the same
 
     return relevance
 
@@ -537,10 +549,10 @@ def best_match(errors, key=relevance):
     return best
 
 
-def _most_relevant(
-    errors: Iterable[_E],
-    key: Callable[[_E], Any],
-) -> tuple[Any, _E | None]:
+def _most_relevant[E: _Error](
+    errors: Iterable[E],
+    key: Callable[[E], Any],
+) -> tuple[Any, E | None]:
     """
     Find the most relevant error along with its key, computing each key once.
 

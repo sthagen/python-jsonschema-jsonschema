@@ -40,7 +40,8 @@ html_theme = "furo"
 
 # See sphinx-doc/sphinx#10785
 _TYPE_ALIASES = {
-    "jsonschema._format._F": ("data", "_F"),
+    # the type parameter of the format checker decorators
+    "F": ("data", "jsonschema._format._FormatCheckCallable"),
     "_typing.id_of": ("data", "jsonschema._typing.id_of"),
 }
 
@@ -52,8 +53,12 @@ def _resolve_broken_refs(app, env, node, contnode):
     if node["reftarget"].startswith("referencing."):  # :( :( :( :( :(
         node["reftype"] = "data"
         from sphinx.ext import intersphinx
+
         return intersphinx.resolve_reference_in_inventory(
-            env, "referencing", node, contnode,
+            env,
+            "referencing",
+            node,
+            contnode,
         )
 
     kind, target = _TYPE_ALIASES.get(node["reftarget"], (None, None))
